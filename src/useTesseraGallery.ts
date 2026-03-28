@@ -1,0 +1,161 @@
+import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
+
+import { computeTesseraLayout } from './computeTesseraLayout'
+import type { GalleryItem, LayoutOptions, ResolvedRow } from './types'
+
+type CommittedRow<T> = {
+  height: number
+  items: Array<{ item: GalleryItem<T>; width: number; height: number }>
+}
+
+function toResolvedRow<T>(row: CommittedRow<T>, loadedSet: Set<string | number>): ResolvedRow<T> {
+  return {
+    height: row.height,
+    items: row.items.map(({ item, width, height }) => ({
+      item,
+      width,
+      height,
+      loaded: loadedSet.has(item.key),
+    })),
+  }
+}
+
+export function useTesseraGallery<T>(
+  items: GalleryItem<T>[],
+  options: LayoutOptions,
+): {
+  containerRef: RefObject<HTMLDivElement | null>
+  rows: ResolvedRow<T>[]
+  onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
+} {
+  // ─── Hooks ─────────────────────────────────────────────────────────────────
+
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  // Aspect ratio cache — populated from items with known aspectRatio and via onLoad
+  const aspectRatioCache = useRef<Map<string | number, number>>(new Map())
+  // Tracks which items have been confirmed browser-loaded via onLoad
+  const loadedSet = useRef<Set<string | number>>(new Set())
+  // Increment to trigger re-renders when cache or loadedSet changes
+  const [, rerender] = useReducer(n => n + 1, 0)
+
+  // Append-only layout: committed rows are locked and never reshuffled
+  const committedRowsRef = useRef<CommittedRow<T>[]>([])
+  const committedItemCountRef = useRef(0)
+  const committedContainerWidthRef = useRef(0)
+  const committedOptionsKeyRef = useRef('')
+
+  // ─── Render-time sync ──────────────────────────────────────────────────────
+
+  // Sync items with pre-known aspectRatios into cache every render.
+  // Pre-known aspectRatio takes precedence — onLoad will not overwrite it.
+  for (const item of items) {
+    if (item.aspectRatio !== undefined) {
+      aspectRatioCache.current.set(item.key, item.aspectRatio)
+    }
+  }
+
+  // ─── Effects ───────────────────────────────────────────────────────────────
+
+  // ResizeObserver — genuine external synchronization, useEffect is correct here
+  useEffect(() => {
+    const observer = new ResizeObserver(entries => {
+      const width = entries[0]?.contentRect.width ?? 0
+      setContainerWidth(width)
+    })
+    const el = containerRef.current
+    if (el) observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  // ─── Callbacks ─────────────────────────────────────────────────────────────
+
+  const onLoad = useCallback(
+    (key: string | number, naturalWidth: number, naturalHeight: number) => {
+      if (naturalWidth <= 0 || naturalHeight <= 0) return
+
+      let changed = false
+
+      // Only cache aspect ratio if not already known (pre-known takes precedence)
+      if (!aspectRatioCache.current.has(key)) {
+        aspectRatioCache.current.set(key, naturalWidth / naturalHeight)
+        changed = true
+      }
+
+      if (!loadedSet.current.has(key)) {
+        loadedSet.current.add(key)
+        changed = true
+      }
+
+      if (changed) rerender()
+    },
+    [],
+  )
+
+  // ─── Append-only layout ────────────────────────────────────────────────────
+  //
+  // Full rows are committed once determined and never reshuffled. Only the
+  // frontier — the last partial row + any new items — is recomputed each render.
+  // This prevents existing images from jumping when new items are appended.
+
+  const resolvedItems = items.filter(item => aspectRatioCache.current.has(item.key))
+
+  const optionsKey = `${options.rowHeight}|${options.gap ?? 0}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
+
+  // Reset committed rows when container width, key options, or item set changes
+  if (
+    containerWidth !== committedContainerWidthRef.current ||
+    optionsKey !== committedOptionsKeyRef.current ||
+    resolvedItems.length < committedItemCountRef.current
+  ) {
+    committedRowsRef.current = []
+    committedItemCountRef.current = 0
+    committedContainerWidthRef.current = containerWidth
+    committedOptionsKeyRef.current = optionsKey
+  }
+
+  // Compute layout only for items beyond the committed frontier
+  const frontierItems = resolvedItems.slice(committedItemCountRef.current)
+
+  const frontierLayout =
+    containerWidth > 0 && frontierItems.length > 0
+      ? computeTesseraLayout(
+          frontierItems.map(item => ({
+            aspectRatio: aspectRatioCache.current.get(item.key)!,
+          })),
+          containerWidth,
+          options,
+        )
+      : []
+
+  // Convert frontier layout rows to typed rows with item references
+  const frontierRows: CommittedRow<T>[] = []
+  let itemIdx = 0
+  for (const layoutRow of frontierLayout) {
+    frontierRows.push({
+      height: layoutRow.height,
+      items: layoutRow.items.map(layoutItem => ({
+        item: frontierItems[itemIdx++],
+        width: layoutItem.width,
+        height: layoutItem.height,
+      })),
+    })
+  }
+
+  // Promote all full rows (all but last) from frontier to committed
+  if (frontierRows.length > 1) {
+    for (let i = 0; i < frontierRows.length - 1; i++) {
+      committedRowsRef.current.push(frontierRows[i])
+      committedItemCountRef.current += frontierRows[i].items.length
+    }
+  }
+
+  const rows: ResolvedRow<T>[] = committedRowsRef.current.map(row => toResolvedRow(row, loadedSet.current))
+  const lastFrontierRow = frontierRows[frontierRows.length - 1]
+  if (lastFrontierRow) {
+    rows.push(toResolvedRow(lastFrontierRow, loadedSet.current))
+  }
+
+  return { containerRef, rows, onLoad }
+}
