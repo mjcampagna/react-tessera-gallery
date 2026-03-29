@@ -362,3 +362,69 @@ describe('maxNumRows', () => {
     expect(rows).toHaveLength(0)
   })
 })
+
+// ─── minColumns ───────────────────────────────────────────────────────────────
+
+describe('minColumns', () => {
+  it('has no effect when rowHeight already fits the requested column count', () => {
+    // 4 square items, container=400, rowHeight=100 → natural columns=4; minColumns=2 no-ops
+    const withMin = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      400,
+      { rowHeight: 100, gap: 0, minColumns: 2 },
+    )
+    const without = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      400,
+      { rowHeight: 100, gap: 0 },
+    )
+    expect(withMin).toEqual(without)
+  })
+
+  it('caps effectiveIdealHeight so that minColumns items fit per row', () => {
+    // container=200, rowHeight=300, minColumns=2 → maxRowHeight = 200/2 = 100
+    // 4 square items at h=100 → rows of 2 items each
+    const rows = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      200,
+      { rowHeight: 300, gap: 0, minColumns: 2 },
+    )
+    // Without minColumns, rowHeight=300 > maxStretch*defaultHeight would push all into one row
+    // With minColumns=2, effectiveIdealHeight=100 → 2 rows of 2
+    expect(rows).toHaveLength(2)
+    rows.forEach(row => expect(row.items).toHaveLength(2))
+  })
+
+  it('respects gap when computing the height cap', () => {
+    // container=210, gap=10, minColumns=2 → maxRowHeight = (210 - 10) / 2 = 100
+    const rows = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      210,
+      { rowHeight: 300, gap: 10, minColumns: 2 },
+    )
+    expect(rows).toHaveLength(2)
+  })
+
+  it('pano gets its own full-width row regardless of position', () => {
+    // container=200, rowHeight=300, minColumns=2 → effectiveIdealHeight=100, minHeight=75
+    // ar=20 pano: rowHeightFor(i, i+1) = 200/20 = 10 < minHeight → pano special case
+    // placed alone; [1,1] placed in a normal row after
+    const rowsPanoFirst = computeTesseraLayout(
+      items([20, 1, 1]),
+      200,
+      { rowHeight: 300, gap: 0, minColumns: 2 },
+    )
+    expect(rowsPanoFirst[0].items).toHaveLength(1)
+    expect(rowsPanoFirst[0].items[0].aspectRatio).toBe(20)
+    expect(rowsPanoFirst[1].items).toHaveLength(2)
+
+    // Pano in the middle
+    const rowsPanoMiddle = computeTesseraLayout(
+      items([1, 1, 20, 1, 1]),
+      200,
+      { rowHeight: 300, gap: 0, minColumns: 2 },
+    )
+    expect(rowsPanoMiddle[1].items).toHaveLength(1)
+    expect(rowsPanoMiddle[1].items[0].aspectRatio).toBe(20)
+  })
+})

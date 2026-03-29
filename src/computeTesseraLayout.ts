@@ -11,6 +11,7 @@ export function computeTesseraLayout(
     rowHeight: rowHeightOption,
     gap: gapOption = 0,
     lastRow = 'left',
+    minColumns,
     maxNumRows = Infinity,
     maxShrink = 0.75,
     maxStretch = 1.5,
@@ -26,8 +27,15 @@ export function computeTesseraLayout(
   const n = items.length
   if (n === 0 || containerWidth <= 0) return []
 
-  const minHeight = idealHeight * maxShrink
-  const maxHeight = idealHeight * maxStretch
+  // minColumns caps idealHeight so that rows of at least N items are viable.
+  // This is a soft guarantee — actual item count per row depends on aspect ratios.
+  const effectiveIdealHeight =
+    minColumns !== undefined
+      ? Math.min(idealHeight, (containerWidth - gap * (minColumns - 1)) / minColumns)
+      : idealHeight
+
+  const minHeight = effectiveIdealHeight * maxShrink
+  const maxHeight = effectiveIdealHeight * maxStretch
 
   // Prefix sums for O(1) aspect ratio range queries
   const prefixAR = new Array<number>(n + 1)
@@ -43,14 +51,14 @@ export function computeTesseraLayout(
     return (containerWidth - gap * numGaps) / totalAR
   }
 
-  // Cost of placing a row at a given height — 0 at idealHeight, 1 at the bounds
+  // Cost of placing a row at a given height — 0 at effectiveIdealHeight, 1 at the bounds
   function badness(h: number): number {
-    if (h >= idealHeight) {
-      const range = maxHeight - idealHeight
-      return range === 0 ? Infinity : (h - idealHeight) ** BADNESS_POWER / range ** BADNESS_POWER
+    if (h >= effectiveIdealHeight) {
+      const range = maxHeight - effectiveIdealHeight
+      return range === 0 ? Infinity : (h - effectiveIdealHeight) ** BADNESS_POWER / range ** BADNESS_POWER
     }
-    const range = idealHeight - minHeight
-    return range === 0 ? Infinity : (idealHeight - h) ** BADNESS_POWER / range ** BADNESS_POWER
+    const range = effectiveIdealHeight - minHeight
+    return range === 0 ? Infinity : (effectiveIdealHeight - h) ** BADNESS_POWER / range ** BADNESS_POWER
   }
 
   // ─── Knuth-Plass DP ──────────────────────────────────────────────────────────
@@ -64,6 +72,17 @@ export function computeTesseraLayout(
 
   for (let i = 0; i < n; i++) {
     if (dp[i] === Infinity) continue
+
+    // Pano special case: item is so wide that even alone it falls below minHeight.
+    // Adding more items only makes the row shorter, so no valid placement exists.
+    // Force it as a solo full-width row, exempt from height constraints.
+    if (rowHeightFor(i, i + 1) < minHeight) {
+      if (dp[i] < dp[i + 1]) {
+        dp[i + 1] = dp[i]
+        pred[i + 1] = i
+      }
+      continue
+    }
 
     // Binary search for the first j where rowHeightFor(i, j) <= maxHeight.
     // rowHeightFor decreases monotonically as j increases (more items → shorter
@@ -115,7 +134,7 @@ export function computeTesseraLayout(
 
   const rows: LayoutRow[] = []
   let start = 0
-  let prevRowHeight = idealHeight
+  let prevRowHeight = effectiveIdealHeight
 
   const effectiveBreaks = breaks.slice(0, maxNumRows)
 
@@ -135,7 +154,7 @@ export function computeTesseraLayout(
       }
 
       // Justify last row if option says so, or if fill ratio meets threshold
-      const naturalWidth = totalAR * idealHeight + gap * numGaps
+      const naturalWidth = totalAR * effectiveIdealHeight + gap * numGaps
       const fillRatio = naturalWidth / containerWidth
       const shouldJustify = lastRow === 'justify' || fillRatio >= justifyThreshold
 
