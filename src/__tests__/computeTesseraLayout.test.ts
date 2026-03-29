@@ -317,3 +317,48 @@ describe('maxShrink / maxStretch', () => {
     expect(rowsWide).toHaveLength(1)
   })
 })
+
+// ─── maxNumRows ───────────────────────────────────────────────────────────────
+
+describe('maxNumRows', () => {
+  it('returns all rows when maxNumRows exceeds row count', () => {
+    // 4 square items at 100px wide, rowHeight=100 → 2 rows of 2
+    const rows = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      200,
+      { rowHeight: 100, maxNumRows: 10 },
+    )
+    expect(rows).toHaveLength(2)
+  })
+
+  it('truncates to maxNumRows', () => {
+    // 4 square items → 2 rows; maxNumRows=1 → only first row
+    const rows = computeTesseraLayout(
+      items([1, 1, 1, 1]),
+      200,
+      { rowHeight: 100, maxNumRows: 1 },
+    )
+    expect(rows).toHaveLength(1)
+  })
+
+  it('dropped rows do not appear in output', () => {
+    // 6 items → 3 rows; maxNumRows=2 → items from row 3 are absent
+    const rows = computeTesseraLayout(
+      items([1, 1, 1, 1, 1, 1]),
+      200,
+      { rowHeight: 100, maxNumRows: 2 },
+    )
+    const totalItems = rows.reduce((s, r) => s + r.items.length, 0)
+    expect(rows).toHaveLength(2)
+    expect(totalItems).toBe(4)
+  })
+
+  it('maxNumRows=0 returns empty', () => {
+    const rows = computeTesseraLayout(
+      items([1, 1]),
+      200,
+      { rowHeight: 100, maxNumRows: 0 },
+    )
+    expect(rows).toHaveLength(0)
+  })
+})

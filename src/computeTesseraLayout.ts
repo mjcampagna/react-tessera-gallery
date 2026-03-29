@@ -11,6 +11,7 @@ export function computeTesseraLayout(
     rowHeight: rowHeightOption,
     gap: gapOption = 0,
     lastRow = 'left',
+    maxNumRows = Infinity,
     maxShrink = 0.75,
     maxStretch = 1.5,
     justifyThreshold = 1,
@@ -103,10 +104,13 @@ export function computeTesseraLayout(
 
   const rows: LayoutRow[] = []
   let start = 0
+  let prevRowHeight = idealHeight
 
-  for (let r = 0; r < breaks.length; r++) {
-    const end = breaks[r]
-    const isLastRow = r === breaks.length - 1
+  const effectiveBreaks = breaks.slice(0, maxNumRows)
+
+  for (let r = 0; r < effectiveBreaks.length; r++) {
+    const end = effectiveBreaks[r]
+    const isLastRow = r === effectiveBreaks.length - 1
     const numGaps = end - start - 1
     const totalAR = prefixAR[end] - prefixAR[start]
 
@@ -128,7 +132,8 @@ export function computeTesseraLayout(
         actualHeight = rowHeightFor(start, end)
         justify = true
       } else {
-        actualHeight = idealHeight
+        // Match the previous row's height so widows don't visually snap to idealHeight
+        actualHeight = prevRowHeight
         justify = false
       }
     } else {
@@ -137,6 +142,7 @@ export function computeTesseraLayout(
     }
 
     rows.push(buildRow(items, start, end, actualHeight, justify, containerWidth, gap))
+    prevRowHeight = actualHeight
     start = end
   }
 

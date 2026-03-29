@@ -2,6 +2,7 @@ export type LayoutOptions = {
   rowHeight: number | ((containerWidth: number) => number)
   gap?: number | ((containerWidth: number) => number)
   lastRow?: 'justify' | 'left' | 'center' | 'right' | 'hide'
+  maxNumRows?: number
   maxShrink?: number
   maxStretch?: number
   justifyThreshold?: number
