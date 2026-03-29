@@ -276,7 +276,8 @@ describe('virtualization', () => {
   })
 
   it('renders only rows within the visible window + overscan', () => {
-    // visibleBottom = innerHeight(100) + OVERSCAN(300) = 400 → rows 0–3 visible
+    // overscan = rowHeight(100) * 2 = 200, visibleBottom = innerHeight(100) + 200 = 300
+    // rows 0–2 (tops 0,100,200 < 300) visible → 3 items
     render(
       <TesseraGallery
         items={makeItems(10)}
@@ -288,11 +289,11 @@ describe('virtualization', () => {
       />,
     )
     act(() => fireResize(100))
-    expect(screen.getAllByTestId('img')).toHaveLength(4)
+    expect(screen.getAllByTestId('img')).toHaveLength(3)
   })
 
   it('renders a bottom spacer for off-screen rows below', () => {
-    // Rows 0–3 visible (400px used), rows 4–9 off-screen → bottom spacer = 600px
+    // Rows 0–2 visible (300px used), rows 3–9 off-screen → bottom spacer = 700px
     const { container } = render(
       <TesseraGallery
         items={makeItems(10)}
@@ -309,7 +310,7 @@ describe('virtualization', () => {
       el => el.children.length === 0,
     ) as HTMLElement[]
     expect(spacers).toHaveLength(1)
-    expect(spacers[0].style.height).toBe('600px')
+    expect(spacers[0].style.height).toBe('700px')
   })
 
   it('updates visible rows when scrolled', () => {
@@ -324,19 +325,19 @@ describe('virtualization', () => {
       />,
     )
     act(() => fireResize(100))
-    expect(screen.getAllByTestId('img')).toHaveLength(4)
+    expect(screen.getAllByTestId('img')).toHaveLength(3)
 
     // Scroll down 500px: rect.top=-500 → containerTop=500
-    // visibleTop=200, visibleBottom=900 → rows 2–8 visible (7 items)
+    // visibleTop=300, visibleBottom=800 → rows 3–7 visible (5 items)
     const outerDiv = container.firstChild as HTMLElement
     outerDiv.getBoundingClientRect = vi.fn().mockReturnValue({ top: -500 })
     act(() => window.dispatchEvent(new Event('scroll')))
 
-    expect(screen.getAllByTestId('img')).toHaveLength(7)
+    expect(screen.getAllByTestId('img')).toHaveLength(5)
   })
 
   it('renders top and bottom spacers when scrolled past the first row', () => {
-    // After scroll: rows 2–8 visible → top spacer=200px (rows 0–1), bottom spacer=100px (row 9)
+    // After scroll: rows 3–7 visible → top spacer=300px (rows 0–2), bottom spacer=200px (rows 8–9)
     const { container } = render(
       <TesseraGallery
         items={makeItems(10)}
@@ -356,7 +357,7 @@ describe('virtualization', () => {
       el => el.children.length === 0,
     ) as HTMLElement[]
     expect(spacers).toHaveLength(2)
-    expect(spacers[0].style.height).toBe('200px')
-    expect(spacers[1].style.height).toBe('100px')
+    expect(spacers[0].style.height).toBe('300px')
+    expect(spacers[1].style.height).toBe('200px')
   })
 })

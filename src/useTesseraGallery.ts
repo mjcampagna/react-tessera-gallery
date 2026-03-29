@@ -28,7 +28,6 @@ type VirtualWindow = {
   bottomSpacerHeight: number
 }
 
-const OVERSCAN = 300
 
 export function useTesseraGallery<T>(
   items: GalleryItem<T>[],
@@ -208,8 +207,9 @@ export function useTesseraGallery<T>(
 
   if (options.virtualize && virtualRange !== null && prevRowsRef.current.length > 0) {
     const stableRows = prevRowsRef.current
-    const visibleTop = virtualRange.top - OVERSCAN
-    const visibleBottom = virtualRange.bottom + OVERSCAN
+    const overscan = options.overscan ?? resolvedRowHeight * 2
+    const visibleTop = virtualRange.top - overscan
+    const visibleBottom = virtualRange.bottom + overscan
 
     // Compute cumulative row tops
     const rowTops: number[] = []

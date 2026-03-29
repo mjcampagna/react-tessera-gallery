@@ -8,6 +8,7 @@ export type LayoutOptions = {
   maxStretch?: number
   justifyThreshold?: number
   virtualize?: boolean
+  overscan?: number
 }
 
 export type LayoutRow = {

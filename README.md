@@ -62,6 +62,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
+| `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
 | `scrollContainerRef` | `RefObject<HTMLElement \| null>` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. |
 
 **`renderItem` arguments:**

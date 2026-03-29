@@ -52,7 +52,7 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 All shared types live in [src/types.ts](src/types.ts): `GalleryItem<T>`, `LayoutOptions`, `LayoutRow`, `ResolvedRow<T>`.
 
-`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`), `virtualize` (default `false`).
+`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`), `virtualize` (default `false`), `overscan` (default `rowHeight * 2`).
 
 ### Build output
 
