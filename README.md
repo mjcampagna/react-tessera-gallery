@@ -61,6 +61,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `maxShrink` | `number` | `0.75` | Minimum row height as a fraction of `rowHeight` |
 | `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
+| `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
 
 **`renderItem` arguments:**
 
@@ -107,6 +108,7 @@ const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options)
 | `rows` | `ResolvedRow<T>[]` | Computed layout rows, each with `height` and `items` |
 | `gap` | `number` | Resolved gap value (useful when `gap` was passed as a callback) |
 | `onLoad` | `(key, naturalWidth, naturalHeight) => void` | Call when an image loads |
+| `virtualWindow` | `{ firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight } \| null` | Set when `virtualize` is true; describes which rows are visible and the spacer heights needed to maintain full scroll height |
 
 ---
 

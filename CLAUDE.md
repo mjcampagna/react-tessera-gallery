@@ -26,7 +26,7 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 1. **`TesseraGallery`** ([src/TesseraGallery.tsx](src/TesseraGallery.tsx)) — Top-level component. Accepts `items`, a `renderItem` render prop, and `LayoutOptions`. Handles all rendering internally.
 
-2. **`useTesseraGallery`** ([src/useTesseraGallery.ts](src/useTesseraGallery.ts)) — Hook for consumers who need direct access to layout state. Returns `containerRef`, `rows` (`ResolvedRow<T>[]`), `gap` (resolved number), and an `onLoad` callback.
+2. **`useTesseraGallery`** ([src/useTesseraGallery.ts](src/useTesseraGallery.ts)) — Hook for consumers who need direct access to layout state. Returns `containerRef`, `rows` (`ResolvedRow<T>[]`), `gap` (resolved number), `onLoad` callback, and `virtualWindow` (non-null when `virtualize` is enabled).
 
 3. **`computeTesseraLayout`** ([src/computeTesseraLayout.ts](src/computeTesseraLayout.ts)) — Pure layout function, no React dependency. Takes items with known aspect ratios, container width, and `LayoutOptions`; returns `LayoutRow[]` with pixel dimensions.
 
@@ -44,11 +44,13 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 **Responsive options:** `rowHeight` and `gap` accept `number | ((containerWidth: number) => number)`. The callback is resolved inside the hook using the width it already observes. `useTesseraGallery` returns the resolved `gap` so components don't need to re-resolve it.
 
+**Virtualization:** Opt-in via `virtualize` prop. Implemented via `useVirtualWindow` ([src/useVirtualWindow.ts](src/useVirtualWindow.ts)) — attaches a passive `window` scroll listener debounced with `requestAnimationFrame`, returns the visible pixel range in container-local coordinates. `useTesseraGallery` computes cumulative row offsets and derives `virtualWindow` (first/last visible row indices + spacer heights). `TesseraGallery` renders only the visible slice of rows with spacer divs above and below. No effect when disabled.
+
 ### Types
 
 All shared types live in [src/types.ts](src/types.ts): `GalleryItem<T>`, `LayoutOptions`, `LayoutRow`, `ResolvedRow<T>`.
 
-`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`).
+`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`), `virtualize` (default `false`).
 
 ### Build output
 

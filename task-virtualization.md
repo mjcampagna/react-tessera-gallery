@@ -70,17 +70,15 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 ## Scope
 
-### `react-tessera-gallery`
+### `react-tessera-gallery` ✓ Complete
 
-**Prerequisite work (done):**
 - ✓ `contain: layout` on row wrappers in `TesseraGallery`
-- ✓ `rows` reference stabilized in `useTesseraGallery` — consumers using `React.memo` won't re-render when layout is unchanged
-
-**Remaining:**
-- New internal hook: `useVirtualWindow`
-- Modify `useTesseraGallery` / `TesseraGallery` to accept and act on `virtualize`
-- No changes to `computeTesseraLayout` or public types (except adding `virtualize?: boolean` to `LayoutOptions`)
-- Tests: `useVirtualWindow` unit tests with a mock scroll environment; integration tests confirming only in-range rows are rendered
+- ✓ `rows` reference stabilized in `useTesseraGallery`
+- ✓ `useVirtualWindow` hook — passive scroll listener, rAF debounce, container-local range
+- ✓ `virtualize?: boolean` added to `LayoutOptions`
+- ✓ `useTesseraGallery` computes row offsets and `virtualWindow`
+- ✓ `TesseraGallery` renders visible rows slice with top/bottom spacer divs
+- ✓ Tests: `useVirtualWindow` unit tests + `TesseraGallery` integration tests
 
 ### `react-masonry-gallery`
 
