@@ -18,6 +18,11 @@ class MockResizeObserver {
 
 beforeAll(() => {
   vi.stubGlobal('ResizeObserver', MockResizeObserver)
+  vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    cb(0)
+    return 0
+  })
+  vi.stubGlobal('cancelAnimationFrame', vi.fn())
 })
 
 beforeEach(() => {
@@ -238,5 +243,120 @@ describe('lastRow alignment', () => {
 
   it("'right': last row uses flex-end", () => {
     expect(renderGallery('right').style.justifyContent).toBe('flex-end')
+  })
+})
+
+// ─── virtualization ───────────────────────────────────────────────────────────
+
+describe('virtualization', () => {
+  // Setup: 10 square items, rowHeight=100, no gap, container=100px
+  // → 10 rows × 100px = 1000px total height
+  // OVERSCAN=300, innerHeight=100 → visibleBottom=400 → rows 0–3 visible initially (4 items)
+
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
+  })
+
+  function makeItems(count: number) {
+    return Array.from({ length: count }, (_, i) => photo(`${i}`, 1))
+  }
+
+  it('renders all items when virtualize is not set', () => {
+    render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    expect(screen.getAllByTestId('img')).toHaveLength(10)
+  })
+
+  it('renders only rows within the visible window + overscan', () => {
+    // visibleBottom = innerHeight(100) + OVERSCAN(300) = 400 → rows 0–3 visible
+    render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        virtualize
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    expect(screen.getAllByTestId('img')).toHaveLength(4)
+  })
+
+  it('renders a bottom spacer for off-screen rows below', () => {
+    // Rows 0–3 visible (400px used), rows 4–9 off-screen → bottom spacer = 600px
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        virtualize
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    const spacers = Array.from(outerDiv.children).filter(
+      el => el.children.length === 0,
+    ) as HTMLElement[]
+    expect(spacers).toHaveLength(1)
+    expect(spacers[0].style.height).toBe('600px')
+  })
+
+  it('updates visible rows when scrolled', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        virtualize
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    expect(screen.getAllByTestId('img')).toHaveLength(4)
+
+    // Scroll down 500px: rect.top=-500 → containerTop=500
+    // visibleTop=200, visibleBottom=900 → rows 2–8 visible (7 items)
+    const outerDiv = container.firstChild as HTMLElement
+    outerDiv.getBoundingClientRect = vi.fn().mockReturnValue({ top: -500 })
+    act(() => window.dispatchEvent(new Event('scroll')))
+
+    expect(screen.getAllByTestId('img')).toHaveLength(7)
+  })
+
+  it('renders top and bottom spacers when scrolled past the first row', () => {
+    // After scroll: rows 2–8 visible → top spacer=200px (rows 0–1), bottom spacer=100px (row 9)
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        virtualize
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    outerDiv.getBoundingClientRect = vi.fn().mockReturnValue({ top: -500 })
+    act(() => window.dispatchEvent(new Event('scroll')))
+
+    const spacers = Array.from(outerDiv.children).filter(
+      el => el.children.length === 0,
+    ) as HTMLElement[]
+    expect(spacers).toHaveLength(2)
+    expect(spacers[0].style.height).toBe('200px')
+    expect(spacers[1].style.height).toBe('100px')
   })
 })

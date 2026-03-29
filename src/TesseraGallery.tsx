@@ -13,12 +13,20 @@ type Props<T> = {
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, ...options }: Props<T>): ReactNode {
-  const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options)
+  const { containerRef, rows, gap, onLoad, virtualWindow } = useTesseraGallery(items, options)
   const { lastRow = 'left' } = options
+
+  const firstIndex = virtualWindow?.firstIndex ?? 0
+  const lastIndex = virtualWindow?.lastIndex ?? rows.length - 1
+  const visibleRows = virtualWindow ? rows.slice(firstIndex, lastIndex + 1) : rows
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}>
-      {rows.map((row, rowIndex) => {
+      {virtualWindow && virtualWindow.topSpacerHeight > 0 && (
+        <div style={{ height: virtualWindow.topSpacerHeight, contain: 'layout' }} />
+      )}
+      {visibleRows.map((row, i) => {
+        const rowIndex = firstIndex + i
         const isLastRow = rowIndex === rows.length - 1
         const justifyContent =
           isLastRow && lastRow === 'center' ? 'center' :
@@ -40,6 +48,9 @@ export function TesseraGallery<T>({ items, renderItem, ...options }: Props<T>): 
           </div>
         )
       })}
+      {virtualWindow && virtualWindow.bottomSpacerHeight > 0 && (
+        <div style={{ height: virtualWindow.bottomSpacerHeight, contain: 'layout' }} />
+      )}
     </div>
   )
 }

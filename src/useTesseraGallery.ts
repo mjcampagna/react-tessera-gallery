@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
 
 import { computeTesseraLayout } from './computeTesseraLayout'
+import { useVirtualWindow } from './useVirtualWindow'
 import type { GalleryItem, LayoutOptions, ResolvedRow } from './types'
 
 type CommittedRow<T> = {
@@ -20,6 +21,15 @@ function toResolvedRow<T>(row: CommittedRow<T>, loadedSet: Set<string | number>)
   }
 }
 
+type VirtualWindow = {
+  firstIndex: number
+  lastIndex: number
+  topSpacerHeight: number
+  bottomSpacerHeight: number
+}
+
+const OVERSCAN = 300
+
 export function useTesseraGallery<T>(
   items: GalleryItem<T>[],
   options: LayoutOptions,
@@ -28,6 +38,7 @@ export function useTesseraGallery<T>(
   rows: ResolvedRow<T>[]
   gap: number
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
+  virtualWindow: VirtualWindow | null
 } {
   // ─── Hooks ─────────────────────────────────────────────────────────────────
 
@@ -43,6 +54,8 @@ export function useTesseraGallery<T>(
 
   // Stabilized rows output — only updated when content genuinely changes
   const prevRowsRef = useRef<ResolvedRow<T>[]>([])
+
+  const virtualRange = useVirtualWindow(containerRef, options.virtualize === true)
 
   // Append-only layout: committed rows are locked and never reshuffled
   const committedRowsRef = useRef<CommittedRow<T>[]>([])
@@ -188,5 +201,45 @@ export function useTesseraGallery<T>(
     })
   if (!isStable) prevRowsRef.current = rows
 
-  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad }
+  // ─── Virtual window ────────────────────────────────────────────────────────
+
+  let virtualWindow: VirtualWindow | null = null
+
+  if (options.virtualize && virtualRange !== null && prevRowsRef.current.length > 0) {
+    const stableRows = prevRowsRef.current
+    const visibleTop = virtualRange.top - OVERSCAN
+    const visibleBottom = virtualRange.bottom + OVERSCAN
+
+    // Compute cumulative row tops
+    const rowTops: number[] = []
+    let cumTop = 0
+    for (const row of stableRows) {
+      rowTops.push(cumTop)
+      cumTop += row.height + resolvedGap
+    }
+    const totalHeight = cumTop - resolvedGap
+
+    let firstIndex = stableRows.length
+    let lastIndex = -1
+    for (let i = 0; i < stableRows.length; i++) {
+      const rowBottom = rowTops[i] + stableRows[i].height
+      if (rowBottom > visibleTop && rowTops[i] < visibleBottom) {
+        if (firstIndex === stableRows.length) firstIndex = i
+        lastIndex = i
+      }
+    }
+
+    // Fallback: show all rows if none are in range (e.g. before first scroll measurement)
+    if (firstIndex > lastIndex) {
+      firstIndex = 0
+      lastIndex = stableRows.length - 1
+    }
+
+    const topSpacerHeight = rowTops[firstIndex]
+    const bottomSpacerHeight = totalHeight - (rowTops[lastIndex] + stableRows[lastIndex].height)
+
+    virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
+  }
+
+  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, virtualWindow }
 }
