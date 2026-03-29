@@ -1,6 +1,10 @@
 # Task: Virtualization
 
-Render only items near the viewport. For large collections the full DOM is expensive — Google Photos keeps ~50 tiles in the DOM at any time regardless of library size. Neither `TesseraGallery` nor `MasonryGallery` does this today.
+Render only items near the viewport. For large collections the full DOM is expensive — Google Photos keeps ~50 tiles in the DOM at any time regardless of library size.
+
+In both layout modes the layout is already fully computed before rendering — we have pixel dimensions for everything. Virtualization is a rendering concern only; no changes to the pure layout functions are needed.
+
+---
 
 ## Problem shape
 
@@ -11,7 +15,7 @@ The two modes differ in how item height is known:
 - **Justified rows** (`TesseraGallery`): every `LayoutRow` has a pixel `height`. Total scroll height = sum of row heights + gaps. Per-row spacers are straightforward.
 - **Masonry** (`MasonryGallery`): each column has independently accumulating height. Total container height = max column height. Per-item heights are known from `computeMasonryLayout`. Spacers work per column.
 
-In both cases the layout is already fully computed before rendering — we have pixel dimensions for everything. Virtualization is a rendering concern only; no changes to the pure layout functions are needed.
+---
 
 ## Proposed API
 
@@ -19,14 +23,13 @@ Virtualization should be opt-in to keep the default simple. A `virtualize` prop 
 
 ```tsx
 <TesseraGallery items={...} rowHeight={200} virtualize />
-<MasonryGallery items={...} columns={3} virtualize />
 ```
 
 No additional props should be required. The overscan (how many px beyond the viewport to render) can be a fixed internal constant (e.g. `1.5 × viewport height`) or an optional `overscan` prop if tuning is needed.
 
-## Implementation sketch
+---
 
-### Shared infrastructure
+## Shared infrastructure
 
 A new internal hook `useVirtualWindow` that:
 1. Attaches a scroll listener to `window` (or an optional scroll container ref)
@@ -35,15 +38,23 @@ A new internal hook `useVirtualWindow` that:
 
 This hook is only instantiated when `virtualize` is true.
 
-### Justified rows (`useTesseraGallery` / `TesseraGallery`)
+---
+
+## Implementation: Justified (`TesseraGallery`)
 
 Rows already have `height`. Compute cumulative `rowTop` offsets from the layout. For each row, check if `[rowTop, rowTop + row.height]` intersects `[top - overscan, bottom + overscan]`.
 
 Render two spacer `<div>`s: one before the first visible row (height = `firstVisibleRowTop`) and one after the last (height = remaining). Visible rows render normally between them.
 
-### Masonry (`useMasonryGallery` / `MasonryGallery`)
+---
+
+## Implementation: Masonry (`MasonryGallery`)
+
+> **Note:** Masonry code lives in `../react-masonry-gallery`. This section should be moved there once virtualization is implemented for that package.
 
 Each column renders independently. Per column, track cumulative item heights. Render a top spacer div for off-screen items above, then visible items, then a bottom spacer for off-screen items below. The column `<div>` always occupies its full height via the spacers — no absolute positioning needed.
+
+---
 
 ## Considerations
 
@@ -55,13 +66,27 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 **`contain` CSS property.** As the Google Photos article notes, annotating row/column wrappers with `contain: layout` helps the browser isolate layout recalculation. Worth adding to spacer and row/column divs regardless of virtualization.
 
+---
+
 ## Scope
+
+### `react-tessera-gallery`
 
 - New internal hook: `useVirtualWindow`
 - Modify `useTesseraGallery` / `TesseraGallery` to accept and act on `virtualize`
-- Modify `useMasonryGallery` / `MasonryGallery` similarly
-- No changes to `computeTesseraLayout`, `computeMasonryLayout`, or public types (except adding `virtualize?: boolean` to `LayoutOptions` and `MasonryOptions`)
-- Tests: `useVirtualWindow` unit tests with a mock scroll environment; integration tests confirming only in-range rows/items are rendered
+- No changes to `computeTesseraLayout` or public types (except adding `virtualize?: boolean` to `LayoutOptions`)
+- Tests: `useVirtualWindow` unit tests with a mock scroll environment; integration tests confirming only in-range rows are rendered
+
+### `react-masonry-gallery`
+
+> Move this section to `../react-masonry-gallery` when implementing virtualization there.
+
+- `useVirtualWindow` can be shared or duplicated — decide at implementation time
+- Modify `useMasonryGallery` / `MasonryGallery` to accept and act on `virtualize`
+- No changes to `computeMasonryLayout` or public types (except adding `virtualize?: boolean` to `MasonryOptions`)
+- Tests: integration tests confirming only in-range items per column are rendered
+
+---
 
 ## Out of scope
 
