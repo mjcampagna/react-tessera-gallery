@@ -26,7 +26,7 @@ export function TesseraGallery<T>({ items, renderItem, ...options }: Props<T>): 
           'flex-start'
 
         return (
-          <div key={rowIndex} style={{ display: 'flex', gap: `${gap}px`, justifyContent }}>
+          <div key={rowIndex} style={{ display: 'flex', gap: `${gap}px`, justifyContent, contain: 'layout' }}>
             {row.items.map(({ item, width, height, loaded }) =>
               renderItem(
                 item,
