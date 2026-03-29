@@ -100,6 +100,18 @@ From the consumer's perspective: `loaded` is already `true` when a previously-se
 
 ---
 
+## Frontier row and infinite scroll
+
+The append-only layout commits all full rows permanently but keeps the last partial row (the "frontier") live — it recomputes whenever new items append. This is intentional: committed rows never shift, but the frontier always reflects the latest state.
+
+With infinite scroll, the frontier row can shift visibly if new items arrive while it's in the viewport. The consumer sees: items already in the last row resize and reposition as new items join it.
+
+This is **not a virtualization bug** — it happens with or without `virtualize`. Virtualization makes it more noticeable because the frontier is usually visible near the bottom of the rendered content.
+
+**Consumer-side mitigation:** trigger the next page fetch before the user reaches the frontier — typically when they're 1–2 viewport heights from the bottom (a larger `rootMargin` on the IntersectionObserver). By the time they scroll to the frontier, the new items have loaded and the frontier has stabilized further down.
+
+---
+
 ## `contain: layout`
 
 Adding `contain: layout` to row wrappers and spacer divs tells the browser that layout changes inside the element don't affect the outside. This isolates reflow to the container, preventing cascading recalculations up the tree.

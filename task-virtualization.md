@@ -60,7 +60,7 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 **Unknown aspect ratios.** Items without a known aspect ratio aren't in the layout yet, so they have no pixel height and can't be virtualized. This is the existing behavior — they simply don't appear until `onLoad` fires. No change needed.
 
-**Scroll container.** The default assumes `window` as the scroll container. An optional `scrollContainer` ref prop would support galleries inside scrollable divs, but this can be deferred.
+**Scroll container.** ✓ Done — `scrollContainerRef` prop added to `TesseraGallery` and `useTesseraGallery`. When provided, the scroll listener attaches to that element instead of `window`.
 
 **Resize.** The existing `ResizeObserver` on `containerRef` already triggers layout recomputation. On resize, `useVirtualWindow` needs to recompute visible range — this happens naturally if `viewportHeight` is re-read from `window.innerHeight` inside the RAF callback.
 
@@ -78,6 +78,8 @@ Each column renders independently. Per column, track cumulative item heights. Re
 - ✓ `virtualize?: boolean` added to `LayoutOptions`
 - ✓ `useTesseraGallery` computes row offsets and `virtualWindow`
 - ✓ `TesseraGallery` renders visible rows slice with top/bottom spacer divs
+- ✓ `overscan` prop — defaults to `rowHeight * 2`
+- ✓ `scrollContainerRef` prop — for galleries inside scrollable divs
 - ✓ Tests: `useVirtualWindow` unit tests + `TesseraGallery` integration tests
 
 ### `react-masonry-gallery`
