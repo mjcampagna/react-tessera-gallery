@@ -64,7 +64,7 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 **Resize.** The existing `ResizeObserver` on `containerRef` already triggers layout recomputation. On resize, `useVirtualWindow` needs to recompute visible range — this happens naturally if `viewportHeight` is re-read from `window.innerHeight` inside the RAF callback.
 
-**`contain` CSS property.** As the Google Photos article notes, annotating row/column wrappers with `contain: layout` helps the browser isolate layout recalculation. Worth adding to spacer and row/column divs regardless of virtualization.
+**`contain` CSS property.** ✓ Done — `contain: layout` is already applied to row wrappers in `TesseraGallery`. Add to spacer divs when virtualization is implemented.
 
 ---
 
@@ -72,6 +72,11 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 ### `react-tessera-gallery`
 
+**Prerequisite work (done):**
+- ✓ `contain: layout` on row wrappers in `TesseraGallery`
+- ✓ `rows` reference stabilized in `useTesseraGallery` — consumers using `React.memo` won't re-render when layout is unchanged
+
+**Remaining:**
 - New internal hook: `useVirtualWindow`
 - Modify `useTesseraGallery` / `TesseraGallery` to accept and act on `virtualize`
 - No changes to `computeTesseraLayout` or public types (except adding `virtualize?: boolean` to `LayoutOptions`)

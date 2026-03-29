@@ -30,8 +30,21 @@ This matters most during scroll events, which fire at high frequency. For our sp
 
 ## Scroll event handling
 
-- Use `requestAnimationFrame` to debounce scroll updates — defer DOM mutations to the next paint cycle, preventing layout thrashing from multiple reads/writes per frame
-- Scroll events fire much faster than the display refresh rate — batching via rAF ensures at most one update per frame
+- **`{ passive: true }`** on the scroll listener — tells the browser the handler won't call `preventDefault()`, so it doesn't wait for the handler before scrolling. Significant performance improvement; always set this on scroll/touch listeners that don't need to block scrolling.
+- **`requestAnimationFrame` debounce** — scroll events fire far faster than the display refresh rate. On each event, cancel any pending rAF and schedule a new one. The rAF callback does the actual read + state update, guaranteeing at most one update per frame (~16ms at 60fps):
+
+```ts
+let rafId: number | null = null
+const handleScroll = () => {
+  if (rafId !== null) cancelAnimationFrame(rafId)
+  rafId = requestAnimationFrame(() => {
+    setScrollTop(window.scrollY)
+    rafId = null
+  })
+}
+window.addEventListener('scroll', handleScroll, { passive: true })
+```
+
 - For a "fake scroll" (custom scroll simulation): listen to `wheel` events, track a virtual scroll offset, and use that to derive which items are in the window. This decouples rendering from native scroll behavior and gives full control over scroll speed and inertia — but is complex and likely overkill for a standard gallery
 
 ---
@@ -74,6 +87,16 @@ Complications for our library:
 - Consumers who wrap their `renderItem` output in `React.memo` may need a custom comparator to handle the layout object reference
 
 **Document this as a consumer responsibility** when virtualization is implemented.
+
+---
+
+## Image caching and virtualization
+
+When a virtualized image scrolls back into view, a new `<img>` DOM element is created with the same `src`. **No new network request is made** — browsers cache images by URL in memory/disk cache. The remounted element loads from cache, essentially instant.
+
+`onLoad` will fire again on the new element. In `useTesseraGallery` this is a no-op: the aspect ratio is already in `aspectRatioCache` (pre-known takes precedence, discovered values are already set) and the key is already in `loadedSet`. No rerender is triggered and `loaded` remains `true` in state.
+
+From the consumer's perspective: `loaded` is already `true` when a previously-seen image scrolls back in. No placeholder will show on remount — which is correct behavior.
 
 ---
 
