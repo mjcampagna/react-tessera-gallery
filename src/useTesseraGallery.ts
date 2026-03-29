@@ -26,6 +26,7 @@ export function useTesseraGallery<T>(
 ): {
   containerRef: RefObject<HTMLDivElement | null>
   rows: ResolvedRow<T>[]
+  gap: number
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
 } {
   // ─── Hooks ─────────────────────────────────────────────────────────────────
@@ -101,7 +102,13 @@ export function useTesseraGallery<T>(
 
   const resolvedItems = items.filter(item => aspectRatioCache.current.has(item.key))
 
-  const optionsKey = `${options.rowHeight}|${options.gap ?? 0}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
+  const resolvedRowHeight =
+    typeof options.rowHeight === 'function' ? options.rowHeight(containerWidth) : options.rowHeight
+
+  const resolvedGap =
+    typeof options.gap === 'function' ? options.gap(containerWidth) : (options.gap ?? 0)
+
+  const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
 
   // Reset committed rows when container width, key options, or item set changes
   if (
@@ -157,5 +164,5 @@ export function useTesseraGallery<T>(
     rows.push(toResolvedRow(lastFrontierRow, loadedSet.current))
   }
 
-  return { containerRef, rows, onLoad }
+  return { containerRef, rows, gap: resolvedGap, onLoad }
 }

@@ -13,8 +13,8 @@ type Props<T> = {
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, ...options }: Props<T>): ReactNode {
-  const { containerRef, rows, onLoad } = useTesseraGallery(items, options)
-  const { gap = 0, lastRow = 'left' } = options
+  const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options)
+  const { lastRow = 'left' } = options
 
   return (
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px` }}>

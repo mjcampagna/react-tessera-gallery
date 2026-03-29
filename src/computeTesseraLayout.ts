@@ -8,13 +8,19 @@ export function computeTesseraLayout(
   options: LayoutOptions,
 ): LayoutRow[] {
   const {
-    rowHeight: idealHeight,
-    gap = 0,
+    rowHeight: rowHeightOption,
+    gap: gapOption = 0,
     lastRow = 'left',
     maxShrink = 0.75,
     maxStretch = 1.5,
     justifyThreshold = 1,
   } = options
+
+  const idealHeight =
+    typeof rowHeightOption === 'function' ? rowHeightOption(containerWidth) : rowHeightOption
+
+  const gap =
+    typeof gapOption === 'function' ? gapOption(containerWidth) : gapOption
 
   const n = items.length
   if (n === 0 || containerWidth <= 0) return []
