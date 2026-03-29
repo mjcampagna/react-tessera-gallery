@@ -62,6 +62,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
+| `scrollContainerRef` | `RefObject<HTMLElement \| null>` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. |
 
 **`renderItem` arguments:**
 
@@ -86,6 +87,26 @@ type GalleryItem<T> = T & {
 }
 ```
 
+**Virtualization with a scrollable container:**
+
+When the gallery is inside a scrollable div (rather than the page itself scrolling), pass a ref to that element via `scrollContainerRef`. Without it, the scroll listener attaches to `window` and will never fire.
+
+```tsx
+const scrollRef = useRef<HTMLDivElement>(null)
+
+<div ref={scrollRef} style={{ overflowY: 'auto', height: '100%' }}>
+  <TesseraGallery
+    items={photos}
+    rowHeight={200}
+    virtualize
+    scrollContainerRef={scrollRef}
+    renderItem={...}
+  />
+</div>
+```
+
+---
+
 Items with a known `aspectRatio` are laid out immediately. Items without one are held out of the layout until `handlers.onLoad` fires, at which point their aspect ratio is derived from `naturalWidth / naturalHeight` and they enter the layout with `loaded: true`.
 
 ---
@@ -97,7 +118,7 @@ The hook underlying `<TesseraGallery>`. Use this directly for custom rendering o
 ```ts
 import { useTesseraGallery } from '@slithy/react-tessera-gallery'
 
-const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options)
+const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options, scrollContainerRef)
 ```
 
 **Returns:**

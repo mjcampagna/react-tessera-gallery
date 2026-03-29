@@ -7,10 +7,15 @@ import { useEffect, useRef, useState } from 'react'
  *
  * When `enabled` is false, no scroll listener is attached and the hook returns
  * null. The hook is always called (Rules of Hooks), but does nothing.
+ *
+ * When `scrollContainerRef` is provided, the scroll listener is attached to
+ * that element instead of `window`. Use this when the gallery lives inside a
+ * scrollable div rather than the page itself.
  */
 export function useVirtualWindow(
   containerRef: React.RefObject<HTMLElement | null>,
   enabled: boolean,
+  scrollContainerRef?: React.RefObject<HTMLElement | null>,
 ): { top: number; bottom: number } | null {
   const [range, setRange] = useState<{ top: number; bottom: number } | null>(null)
   const rafIdRef = useRef<number | null>(null)
@@ -22,13 +27,16 @@ export function useVirtualWindow(
       const el = containerRef.current
       if (!el) return
       const rect = el.getBoundingClientRect()
-      const viewportHeight = window.innerHeight
-      // Convert viewport-relative rect to container-local coordinates
-      const containerTop = 0 - rect.top
-      setRange({
-        top: containerTop,
-        bottom: containerTop + viewportHeight,
-      })
+
+      const sc = scrollContainerRef?.current
+      if (sc) {
+        const scRect = sc.getBoundingClientRect()
+        const containerTop = 0 - (rect.top - scRect.top)
+        setRange({ top: containerTop, bottom: containerTop + sc.clientHeight })
+      } else {
+        const containerTop = 0 - rect.top
+        setRange({ top: containerTop, bottom: containerTop + window.innerHeight })
+      }
     }
 
     const handleScroll = () => {
@@ -42,12 +50,13 @@ export function useVirtualWindow(
     // Initial measurement
     update()
 
-    window.addEventListener('scroll', handleScroll, { passive: true })
+    const target = scrollContainerRef?.current ?? window
+    target.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
-      window.removeEventListener('scroll', handleScroll)
+      target.removeEventListener('scroll', handleScroll)
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current)
     }
-  }, [enabled, containerRef])
+  }, [enabled, containerRef, scrollContainerRef])
 
   return enabled ? range : null
 }

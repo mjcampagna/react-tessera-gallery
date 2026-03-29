@@ -44,7 +44,9 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 **Responsive options:** `rowHeight` and `gap` accept `number | ((containerWidth: number) => number)`. The callback is resolved inside the hook using the width it already observes. `useTesseraGallery` returns the resolved `gap` so components don't need to re-resolve it.
 
-**Virtualization:** Opt-in via `virtualize` prop. Implemented via `useVirtualWindow` ([src/useVirtualWindow.ts](src/useVirtualWindow.ts)) — attaches a passive `window` scroll listener debounced with `requestAnimationFrame`, returns the visible pixel range in container-local coordinates. `useTesseraGallery` computes cumulative row offsets and derives `virtualWindow` (first/last visible row indices + spacer heights). `TesseraGallery` renders only the visible slice of rows with spacer divs above and below. No effect when disabled.
+**Virtualization:** Opt-in via `virtualize` prop. Implemented via `useVirtualWindow` ([src/useVirtualWindow.ts](src/useVirtualWindow.ts)) — attaches a passive scroll listener debounced with `requestAnimationFrame`, returns the visible pixel range in container-local coordinates. `useTesseraGallery` computes cumulative row offsets and derives `virtualWindow` (first/last visible row indices + spacer heights). `TesseraGallery` renders only the visible slice of rows with spacer divs above and below. No effect when disabled.
+
+`scrollContainerRef` (optional third arg to `useTesseraGallery`, prop on `TesseraGallery`) — when the gallery is inside a scrollable div, pass a ref to that element. The scroll listener attaches to it instead of `window`, and `clientHeight` is used instead of `window.innerHeight`. Without this, scroll events never reach `window` and the visible range never updates.
 
 ### Types
 

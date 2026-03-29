@@ -33,6 +33,7 @@ const OVERSCAN = 300
 export function useTesseraGallery<T>(
   items: GalleryItem<T>[],
   options: LayoutOptions,
+  scrollContainerRef?: RefObject<HTMLElement | null>,
 ): {
   containerRef: RefObject<HTMLDivElement | null>
   rows: ResolvedRow<T>[]
@@ -55,7 +56,7 @@ export function useTesseraGallery<T>(
   // Stabilized rows output — only updated when content genuinely changes
   const prevRowsRef = useRef<ResolvedRow<T>[]>([])
 
-  const virtualRange = useVirtualWindow(containerRef, options.virtualize === true)
+  const virtualRange = useVirtualWindow(containerRef, options.virtualize === true, scrollContainerRef)
 
   // Append-only layout: committed rows are locked and never reshuffled
   const committedRowsRef = useRef<CommittedRow<T>[]>([])
