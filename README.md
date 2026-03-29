@@ -36,15 +36,27 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 />
 ```
 
+`rowHeight` and `gap` also accept a callback for responsive layouts — the callback receives the current container width and is re-evaluated whenever the container resizes:
+
+```tsx
+<TesseraGallery
+  items={photos}
+  rowHeight={w => w < 600 ? 120 : 240}
+  gap={w => w < 600 ? 2 : 4}
+  renderItem={...}
+/>
+```
+
 **Props:**
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
 | `items` | `GalleryItem<T>[]` | — | Items to display. Each must have a `key`. `aspectRatio` is optional — see below. |
 | `renderItem` | `(item, layout, handlers) => ReactNode` | — | Render function called for each item |
-| `rowHeight` | `number` | — | Target row height in pixels |
-| `gap` | `number` | `0` | Gap between items and rows in pixels |
+| `rowHeight` | `number \| (containerWidth: number) => number` | — | Target row height in pixels |
+| `gap` | `number \| (containerWidth: number) => number` | `0` | Gap between items and rows in pixels |
 | `lastRow` | `'left' \| 'center' \| 'right' \| 'justify' \| 'hide'` | `'left'` | Alignment of the last (partial) row |
+| `maxNumRows` | `number` | `Infinity` | Maximum number of rows to render; overflow items are dropped |
 | `maxShrink` | `number` | `0.75` | Minimum row height as a fraction of `rowHeight` |
 | `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
 | `justifyThreshold` | `number` | `1` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
@@ -83,7 +95,7 @@ The hook underlying `<TesseraGallery>`. Use this directly for custom rendering o
 ```ts
 import { useTesseraGallery } from '@slithy/react-tessera-gallery'
 
-const { containerRef, rows, onLoad } = useTesseraGallery(items, options)
+const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options)
 ```
 
 **Returns:**
@@ -92,6 +104,7 @@ const { containerRef, rows, onLoad } = useTesseraGallery(items, options)
 |---|---|---|
 | `containerRef` | `RefObject<HTMLDivElement \| null>` | Attach to your container element to observe its width |
 | `rows` | `ResolvedRow<T>[]` | Computed layout rows, each with `height` and `items` |
+| `gap` | `number` | Resolved gap value (useful when `gap` was passed as a callback) |
 | `onLoad` | `(key, naturalWidth, naturalHeight) => void` | Call when an image loads |
 
 ---
