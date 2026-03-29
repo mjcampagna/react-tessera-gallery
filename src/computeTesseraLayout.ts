@@ -14,7 +14,7 @@ export function computeTesseraLayout(
     maxNumRows = Infinity,
     maxShrink = 0.75,
     maxStretch = 1.5,
-    justifyThreshold = 1,
+    justifyThreshold = 0.9,
   } = options
 
   const idealHeight =
@@ -64,9 +64,20 @@ export function computeTesseraLayout(
 
   for (let i = 0; i < n; i++) {
     if (dp[i] === Infinity) continue
-    for (let j = i + 1; j <= n; j++) {
+
+    // Binary search for the first j where rowHeightFor(i, j) <= maxHeight.
+    // rowHeightFor decreases monotonically as j increases (more items → shorter
+    // row), so we can skip the leading portrait-heavy items that would make the
+    // row too tall rather than iterating past them one by one.
+    let lo = i + 1, hi = n
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (rowHeightFor(i, mid) > maxHeight) lo = mid + 1
+      else hi = mid
+    }
+
+    for (let j = lo; j <= n; j++) {
       const h = rowHeightFor(i, j)
-      if (h > maxHeight) continue  // row too tall — add more items
       if (h < minHeight) break     // row too compressed — stop
       const cost = dp[i] + badness(h)
       if (cost < dp[j]) {
