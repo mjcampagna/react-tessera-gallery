@@ -1,6 +1,19 @@
 # @slithy/react-tessera-gallery
 
-React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic programming algorithm to break items into rows that minimize deviation from a target row height. Supports incremental loading, unknown aspect ratios, and append-only rendering to prevent layout jumps as new images load.
+React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic programming algorithm to break items into rows that minimize deviation from a target row height. Supports incremental loading, unknown aspect ratios, and append-only rendering to prevent layout jumps as new images load. Includes opt-in virtualization to keep the DOM small regardless of collection size.
+
+## Features
+
+- **Optimal row layout** — Knuth-Plass dynamic programming minimizes deviation from a target row height across the full item set, not just greedily row-by-row
+- **Append-only rendering** — committed rows are locked and never reshuffled as new images load; only the trailing partial row is live
+- **Incremental loading** — items without a known `aspectRatio` are held out of the layout and discovered via `onLoad`; they enter the layout with `loaded: true`
+- **Responsive** — `rowHeight` and `gap` accept `(containerWidth: number) => number` callbacks, re-evaluated on every container resize
+- **Panorama handling** — ultra-wide items that can't share a row get their own full-width row, exempt from height constraints
+- **Virtualization** — opt-in `virtualize` prop renders only rows near the viewport via spacer divs; no overhead when disabled
+- **Three-layer API** — use the full component, the hook, or the pure layout function depending on how much control you need
+- ESM only · zero runtime dependencies · `sideEffects: false`
+
+---
 
 ## Installation
 
@@ -77,20 +90,20 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 
 ---
 
-## `GalleryItem<T>`
+## Virtualization
 
-Items passed to `TesseraGallery` must satisfy `GalleryItem<T>`:
+Enable `virtualize` to keep the DOM small for large collections. Only rows within the viewport (plus `overscan`) are rendered; spacer divs above and below maintain the full scroll height.
 
-```ts
-type GalleryItem<T> = T & {
-  key: string | number
-  aspectRatio?: number  // optional — discovered via onLoad if omitted
-}
+```tsx
+<TesseraGallery
+  items={photos}
+  rowHeight={200}
+  virtualize
+  renderItem={...}
+/>
 ```
 
-**Virtualization with a scrollable container:**
-
-When the gallery is inside a scrollable div (rather than the page itself scrolling), pass a ref to that element via `scrollContainerRef`. Without it, the scroll listener attaches to `window` and will never fire.
+**With a scrollable container:** if the gallery is inside a scrollable div rather than the page itself scrolling, pass a ref to that element via `scrollContainerRef`. Without it, the scroll listener attaches to `window` and never fires.
 
 ```tsx
 const scrollRef = useRef<HTMLDivElement>(null)
@@ -108,7 +121,20 @@ const scrollRef = useRef<HTMLDivElement>(null)
 
 ---
 
+## `GalleryItem<T>`
+
+Items passed to `TesseraGallery` must satisfy `GalleryItem<T>`:
+
+```ts
+type GalleryItem<T> = T & {
+  key: string | number
+  aspectRatio?: number  // optional — discovered via onLoad if omitted
+}
+```
+
 Items with a known `aspectRatio` are laid out immediately. Items without one are held out of the layout until `handlers.onLoad` fires, at which point their aspect ratio is derived from `naturalWidth / naturalHeight` and they enter the layout with `loaded: true`.
+
+Providing `aspectRatio` upfront is recommended when possible — it produces a stable layout from the first render and is required for virtualization to work without visible row shifts.
 
 ---
 
