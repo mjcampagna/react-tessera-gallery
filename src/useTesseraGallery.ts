@@ -41,6 +41,9 @@ export function useTesseraGallery<T>(
   // Increment to trigger re-renders when cache or loadedSet changes
   const [, rerender] = useReducer(n => n + 1, 0)
 
+  // Stabilized rows output — only updated when content genuinely changes
+  const prevRowsRef = useRef<ResolvedRow<T>[]>([])
+
   // Append-only layout: committed rows are locked and never reshuffled
   const committedRowsRef = useRef<CommittedRow<T>[]>([])
   const committedItemCountRef = useRef(0)
@@ -164,5 +167,26 @@ export function useTesseraGallery<T>(
     rows.push(toResolvedRow(lastFrontierRow, loadedSet.current))
   }
 
-  return { containerRef, rows, gap: resolvedGap, onLoad }
+  // Stabilize the rows reference — only return a new array if something actually
+  // changed. This prevents consumers using React.memo from re-rendering when a
+  // parent re-renders for unrelated reasons but the gallery layout hasn't changed.
+  const isStable =
+    rows.length === prevRowsRef.current.length &&
+    rows.every((row, i) => {
+      const prev = prevRowsRef.current[i]
+      return (
+        row.height === prev?.height &&
+        row.items.length === prev?.items.length &&
+        row.items.every(
+          (item, j) =>
+            item.width === prev.items[j]?.width &&
+            item.height === prev.items[j]?.height &&
+            item.loaded === prev.items[j]?.loaded &&
+            item.item === prev.items[j]?.item,
+        )
+      )
+    })
+  if (!isStable) prevRowsRef.current = rows
+
+  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad }
 }
