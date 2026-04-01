@@ -86,7 +86,7 @@ Complications for our library:
 - The layout object `{ width, height, loaded }` is created inline each render, producing a new object reference even when values haven't changed
 - Consumers who wrap their `renderItem` output in `React.memo` may need a custom comparator to handle the layout object reference
 
-**Document this as a consumer responsibility** when virtualization is implemented.
+**Documented in README** under the Virtualization section, with a concrete example using a custom comparator.
 
 ---
 
@@ -116,7 +116,9 @@ This is **not a virtualization bug** — it happens with or without `virtualize`
 
 Adding `contain: layout` to row wrappers and spacer divs tells the browser that layout changes inside the element don't affect the outside. This isolates reflow to the container, preventing cascading recalculations up the tree.
 
-Worth adding to row and spacer `<div>`s regardless of whether `virtualize` is enabled — it's a safe hint with no visible side effects.
+**Implemented:** applied to row `<div>`s and both spacer `<div>`s in `TesseraGallery.tsx`, regardless of whether `virtualize` is enabled.
+
+During iOS debugging, `contain: layout` was briefly suspected of causing a progressive width-shrink on Safari. The actual cause was a DP failure producing a garbage row that grew unboundedly as pages appended — unrelated to `contain`. The fix was removing `maxHeight` as a hard DP constraint (v0.4.5).
 
 ---
 
@@ -135,7 +137,7 @@ Not a consideration for this library in its current form, but the ceiling to be 
 
 ## Spacer div approach vs. absolute positioning
 
-Our planned approach (two spacer divs — one above, one below visible rows) vs. the alternative (absolute positioning + `transform: translateY()`):
+Our implementation uses two spacer divs — one above, one below visible rows. The alternative would be absolute positioning + `transform: translateY()`:
 
 **Spacer divs (our plan):**
 - Simpler — flow layout, no coordinate math
@@ -149,4 +151,4 @@ Our planned approach (two spacer divs — one above, one below visible rows) vs.
 - Requires explicit container height and per-item coordinate calculation
 - `transform: translateY()` avoids reflow on position updates
 
-For our justified layout with known row heights, the spacer approach is the right starting point.
+For our justified layout with known row heights, the spacer approach is the right choice — and the one we shipped.

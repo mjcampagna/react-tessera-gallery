@@ -32,6 +32,7 @@ No additional props should be required. The overscan (how many px beyond the vie
 ## Shared infrastructure
 
 A new internal hook `useVirtualWindow` that:
+
 1. Attaches a scroll listener to `window` (or an optional scroll container ref)
 2. Tracks `scrollTop` + `viewportHeight`, debounced via `requestAnimationFrame`
 3. Returns `{ top, bottom }` — the visible pixel range within the gallery container
@@ -93,7 +94,7 @@ Each column renders independently. Per column, track cumulative item heights. Re
 
 ---
 
-## Out of scope
+## Out of scope / backlog
 
 - Section/segment grouping (Google Photos style date bucketing)
 - Low-res placeholder images / progressive loading
