@@ -129,6 +129,30 @@ rootMargin fires → fetch → data arrives → items enter layout → overscan 
 
 Everything from the fetch onward must complete before the user reaches the overscan boundary. That means `rootMargin` should lead by at least `overscan` distance plus expected network latency — in practice often 2–3× `overscan`. If `rootMargin` is smaller than `overscan`, the data may not be available when overscan tries to render it, causing a hard stop at the bottom of the current layout.
 
+**Performance and `React.memo`:** when `virtualize` is enabled, `renderItem` is called for every visible item on every scroll tick. If your item component is expensive to render, wrap it in `React.memo`. Note that the `layout` object (`{ width, height, loaded }`) is a new reference on every render — if your comparator checks object identity, use a custom comparator or destructure the values:
+
+```tsx
+const Photo = React.memo(
+  ({ item, width, height, loaded }) => (
+    <img src={item.src} width={width} height={height} style={{ opacity: loaded ? 1 : 0 }} />
+  ),
+  (prev, next) =>
+    prev.width === next.width &&
+    prev.height === next.height &&
+    prev.loaded === next.loaded &&
+    prev.item === next.item,
+)
+
+<TesseraGallery
+  items={photos}
+  rowHeight={200}
+  virtualize
+  renderItem={(item, layout, handlers) => (
+    <Photo key={item.key} item={item} {...layout} />
+  )}
+/>
+```
+
 ---
 
 ## `GalleryItem<T>`
