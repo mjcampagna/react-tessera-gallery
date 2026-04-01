@@ -71,8 +71,8 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `lastRow` | `'left' \| 'center' \| 'right' \| 'justify' \| 'hide'` | `'left'` | Alignment of the last (partial) row |
 | `minColumns` | `number` | — | Soft minimum items per row — caps `rowHeight` so rows of at least N items are viable. Ultra-wide panos that can't share a row are exempt and always get their own full-width row. |
 | `maxNumRows` | `number` | `Infinity` | Maximum number of rows to render; overflow items are dropped |
-| `maxShrink` | `number` | `0.75` | Minimum row height as a fraction of `rowHeight` |
-| `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
+| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height |
+| `maxStretch` | `number` | `1.5` | Controls how steeply the badness penalty rises above `rowHeight`; not a hard ceiling — rows may exceed this height if no better placement exists |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
 | `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
@@ -193,8 +193,8 @@ const rows = computeTesseraLayout(
 | `lastRow` | `'left' \| 'center' \| 'right' \| 'justify' \| 'hide'` | `'left'` | Alignment of the last (partial) row |
 | `minColumns` | `number` | — | Soft minimum items per row; caps `rowHeight` so N-item rows are viable |
 | `maxNumRows` | `number` | `Infinity` | Maximum number of rows; overflow items are dropped |
-| `maxShrink` | `number` | `0.75` | Minimum row height as a fraction of `rowHeight` |
-| `maxStretch` | `number` | `1.5` | Maximum row height as a multiple of `rowHeight` |
+| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height |
+| `maxStretch` | `number` | `1.5` | Controls how steeply the badness penalty rises above `rowHeight`; not a hard ceiling — rows may exceed this height if no better placement exists |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 
 **Returns:** `LayoutRow[]` — each row has `height: number` and `items: Array<{ aspectRatio, width, height }>`.

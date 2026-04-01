@@ -36,7 +36,7 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 **Aspect ratio handling:** Items may declare `aspectRatio` upfront. If unknown, the hook discovers it via the `onLoad` callback when the `<img>` fires its load event, then caches it. Pre-known `aspectRatio` takes precedence and `onLoad` will not overwrite it.
 
-**Knuth-Plass algorithm:** `computeTesseraLayout` uses dynamic programming with a cubic badness penalty (`|deviation|³`) for rows deviating from `rowHeight`. Hard constraints are `minHeight = rowHeight * maxShrink` and `maxHeight = rowHeight * maxStretch`. Binary search finds the first valid `j` per row start, skipping portrait-heavy items efficiently.
+**Knuth-Plass algorithm:** `computeTesseraLayout` uses dynamic programming with a cubic badness penalty (`|deviation|³`) for rows deviating from `rowHeight`. The only hard constraint is `minHeight = rowHeight * maxShrink` — rows below this height are rejected. `maxStretch` controls how steeply badness rises above `rowHeight` but is not a hard ceiling; rows may exceed it if no better placement exists. The inner loop starts from `j = i + 1` and breaks when `rowHeightFor(i, j) < minHeight`.
 
 **Pano special case:** If a single item is so wide that `rowHeightFor(i, i+1) < minHeight` — meaning even alone it falls below the minimum — it is force-placed as a solo full-width row, exempt from height constraints. This handles ultra-wide panoramas at any position in the layout.
 
