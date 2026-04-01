@@ -119,6 +119,16 @@ const scrollRef = useRef<HTMLDivElement>(null)
 </div>
 ```
 
+**Pagination and `overscan`:** if you're using an IntersectionObserver to trigger pagination (fetching the next page of items), the observer's `rootMargin` and `overscan` serve different purposes and should be tuned independently.
+
+`overscan` controls how much pre-rendered DOM buffer exists above and below the viewport — it only kicks in once item data is already in the layout. `rootMargin` controls how early the fetch fires. The full chain is:
+
+```
+rootMargin fires → fetch → data arrives → items enter layout → overscan renders them → user arrives
+```
+
+Everything from the fetch onward must complete before the user reaches the overscan boundary. That means `rootMargin` should lead by at least `overscan` distance plus expected network latency — in practice often 2–3× `overscan`. If `rootMargin` is smaller than `overscan`, the data may not be available when overscan tries to render it, causing a hard stop at the bottom of the current layout.
+
 ---
 
 ## `GalleryItem<T>`
