@@ -405,6 +405,24 @@ describe('minColumns', () => {
     expect(rows).toHaveLength(2)
   })
 
+  it('does not produce a garbage row when AR and minColumns create a dead zone', () => {
+    // AR ≈ 1.333 (4:3 photo), minColumns:2, 398px container, rowHeight:256
+    // effectiveIdealHeight = min(256, 398/2) = 199, minHeight = 149.25
+    // Previously: solo h≈299 was above old maxHeight (298.5), pair h≈149.3 was below minHeight (149.25)
+    // → neither placement was valid, DP failed, fallback produced a garbage row
+    // Now: maxHeight removed; solo h≈299 is valid (above minHeight), DP finds a solution
+    const ar = 4 / 3
+    const manyItems = items(Array(6).fill(ar))
+    const rows = computeTesseraLayout(manyItems, 398, { rowHeight: 256, minColumns: 2 })
+    const totalItems = rows.reduce((s, r) => s + r.items.length, 0)
+    // All items accounted for — no garbage/dropped items
+    expect(totalItems).toBe(6)
+    // No row should have a near-zero height (the garbage row symptom)
+    rows.forEach(row => expect(row.height).toBeGreaterThan(50))
+    // No single row should contain all items (the garbage row symptom)
+    rows.forEach(row => expect(row.items.length).toBeLessThan(6))
+  })
+
   it('pano gets its own full-width row regardless of position', () => {
     // container=200, rowHeight=300, minColumns=2 → effectiveIdealHeight=100, minHeight=75
     // ar=20 pano: rowHeightFor(i, i+1) = 200/20 = 10 < minHeight → pano special case

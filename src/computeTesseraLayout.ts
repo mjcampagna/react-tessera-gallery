@@ -35,7 +35,6 @@ export function computeTesseraLayout(
       : idealHeight
 
   const minHeight = effectiveIdealHeight * maxShrink
-  const maxHeight = effectiveIdealHeight * maxStretch
 
   // Prefix sums for O(1) aspect ratio range queries
   const prefixAR = new Array<number>(n + 1)
@@ -51,10 +50,11 @@ export function computeTesseraLayout(
     return (containerWidth - gap * numGaps) / totalAR
   }
 
-  // Cost of placing a row at a given height — 0 at effectiveIdealHeight, 1 at the bounds
+  // Cost of placing a row at a given height — 0 at effectiveIdealHeight, unbounded above.
+  // maxStretch controls the steepness of the penalty above idealHeight but is not a hard limit.
   function badness(h: number): number {
     if (h >= effectiveIdealHeight) {
-      const range = maxHeight - effectiveIdealHeight
+      const range = effectiveIdealHeight * (maxStretch - 1)
       return range === 0 ? Infinity : (h - effectiveIdealHeight) ** BADNESS_POWER / range ** BADNESS_POWER
     }
     const range = effectiveIdealHeight - minHeight
@@ -84,22 +84,11 @@ export function computeTesseraLayout(
       continue
     }
 
-    // Binary search for the first j where rowHeightFor(i, j) <= maxHeight.
-    // rowHeightFor decreases monotonically as j increases (more items → shorter
-    // row), so we can skip the leading portrait-heavy items that would make the
-    // row too tall rather than iterating past them one by one.
-    let lo = i + 1, hi = n
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (rowHeightFor(i, mid) > maxHeight) lo = mid + 1
-      else hi = mid
-    }
-
-    for (let j = lo; j <= n; j++) {
+    for (let j = i + 1; j <= n; j++) {
       const h = rowHeightFor(i, j)
       if (h < minHeight) break     // row too compressed — stop
       const cost = dp[i] + badness(h)
-      if (cost < dp[j]) {
+      if (cost <= dp[j]) {
         dp[j] = cost
         pred[j] = i
       }
