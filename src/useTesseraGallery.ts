@@ -79,33 +79,24 @@ export function useTesseraGallery<T>(
   useEffect(() => {
     const observer = new ResizeObserver(entries => {
       const width = entries[0]?.contentRect.width ?? 0
-      console.log('[tessera] ResizeObserver fired — width:', width, width === 0 ? '(ignored)' : '')
       if (width > 0) setContainerWidth(width)
     })
     const el = containerRef.current
-    console.log('[tessera] ResizeObserver attached to:', el)
     if (el) observer.observe(el)
-    return () => {
-      console.log('[tessera] ResizeObserver disconnected')
-      observer.disconnect()
-    }
+    return () => observer.disconnect()
   }, [])
 
   // ─── Callbacks ─────────────────────────────────────────────────────────────
 
   const onLoad = useCallback(
     (key: string | number, naturalWidth: number, naturalHeight: number) => {
-      if (naturalWidth <= 0 || naturalHeight <= 0) {
-        console.log('[tessera] onLoad ignored — bad dimensions:', { key, naturalWidth, naturalHeight })
-        return
-      }
+      if (naturalWidth <= 0 || naturalHeight <= 0) return
 
       let changed = false
 
       // Only cache aspect ratio if not already known (pre-known takes precedence)
       if (!aspectRatioCache.current.has(key)) {
         aspectRatioCache.current.set(key, naturalWidth / naturalHeight)
-        console.log('[tessera] onLoad — new aspectRatio cached:', { key, ar: naturalWidth / naturalHeight })
         changed = true
       }
 
@@ -135,35 +126,12 @@ export function useTesseraGallery<T>(
 
   const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
 
-  console.log('[tessera] render —', {
-    containerWidth,
-    resolvedRowHeight,
-    resolvedGap,
-    optionsKey,
-    totalItems: items.length,
-    resolvedItems: resolvedItems.length,
-    committedItems: committedItemCountRef.current,
-    committedRows: committedRowsRef.current.length,
-  })
-
   // Reset committed rows when container width, key options, or item set changes
   if (
     containerWidth !== committedContainerWidthRef.current ||
     optionsKey !== committedOptionsKeyRef.current ||
     resolvedItems.length < committedItemCountRef.current
   ) {
-    console.log('[tessera] RESET committed rows —', {
-      reason:
-        containerWidth !== committedContainerWidthRef.current ? 'containerWidth changed' :
-        optionsKey !== committedOptionsKeyRef.current ? 'optionsKey changed' :
-        'resolvedItems shrank',
-      containerWidth,
-      prevContainerWidth: committedContainerWidthRef.current,
-      optionsKey,
-      prevOptionsKey: committedOptionsKeyRef.current,
-      resolvedItems: resolvedItems.length,
-      prevCommittedItems: committedItemCountRef.current,
-    })
     committedRowsRef.current = []
     committedItemCountRef.current = 0
     committedContainerWidthRef.current = containerWidth
@@ -172,11 +140,6 @@ export function useTesseraGallery<T>(
 
   // Compute layout only for items beyond the committed frontier
   const frontierItems = resolvedItems.slice(committedItemCountRef.current)
-
-  console.log('[tessera] frontier —', {
-    frontierItems: frontierItems.length,
-    committedItems: committedItemCountRef.current,
-  })
 
   const frontierLayout =
     containerWidth > 0 && frontierItems.length > 0
@@ -188,12 +151,6 @@ export function useTesseraGallery<T>(
           options,
         )
       : []
-
-  console.log('[tessera] frontierLayout rows:', frontierLayout.length, frontierLayout.map(r => ({
-    height: r.height,
-    items: r.items.length,
-    widths: r.items.map(i => i.width),
-  })))
 
   // Convert frontier layout rows to typed rows with item references
   const frontierRows: CommittedRow<T>[] = []
@@ -215,7 +172,6 @@ export function useTesseraGallery<T>(
       committedRowsRef.current.push(frontierRows[i])
       committedItemCountRef.current += frontierRows[i].items.length
     }
-    console.log('[tessera] promoted', frontierRows.length - 1, 'rows to committed — total committed items:', committedItemCountRef.current)
   }
 
   const rows: ResolvedRow<T>[] = committedRowsRef.current.map(row => toResolvedRow(row, loadedSet.current))
@@ -244,7 +200,6 @@ export function useTesseraGallery<T>(
       )
     })
   if (!isStable) {
-    console.log('[tessera] rows changed — total rows now:', rows.length, 'stable:', isStable)
     prevRowsRef.current = rows
   }
 
@@ -287,19 +242,6 @@ export function useTesseraGallery<T>(
     const bottomSpacerHeight = totalHeight - (rowTops[lastIndex] + stableRows[lastIndex].height)
 
     virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
-
-    console.log('[tessera] virtualWindow —', {
-      virtualRange,
-      overscan,
-      visibleTop,
-      visibleBottom,
-      totalRows: stableRows.length,
-      firstIndex,
-      lastIndex,
-      topSpacerHeight,
-      bottomSpacerHeight,
-      totalHeight,
-    })
   }
 
   return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, virtualWindow }
