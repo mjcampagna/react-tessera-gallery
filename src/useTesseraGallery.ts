@@ -2,7 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } 
 
 import { computeTesseraLayout } from './computeTesseraLayout'
 import { useVirtualWindow } from './useVirtualWindow'
-import type { GalleryItem, LayoutOptions, ResolvedRow } from './types'
+import type { GalleryItem, LayoutOptions, ResolvedRow, ScrollContainerRef } from './types'
 
 type CommittedRow<T> = {
   height: number
@@ -32,7 +32,7 @@ type VirtualWindow = {
 export function useTesseraGallery<T>(
   items: GalleryItem<T>[],
   options: LayoutOptions,
-  scrollContainerRef?: RefObject<HTMLElement | null>,
+  scrollContainerRef?: ScrollContainerRef,
 ): {
   containerRef: RefObject<HTMLDivElement | null>
   rows: ResolvedRow<T>[]

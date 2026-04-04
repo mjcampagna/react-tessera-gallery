@@ -76,7 +76,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
 | `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
-| `scrollContainerRef` | `RefObject<HTMLElement \| null>` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. |
+| `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. |
 
 **`renderItem` arguments:**
 
@@ -106,6 +106,7 @@ Enable `virtualize` to keep the DOM small for large collections. Only rows withi
 **With a scrollable container:** if the gallery is inside a scrollable div rather than the page itself scrolling, pass a ref to that element via `scrollContainerRef`. Without it, the scroll listener attaches to `window` and never fires.
 
 ```tsx
+// useRef
 const scrollRef = useRef<HTMLDivElement>(null)
 
 <div ref={scrollRef} style={{ overflowY: 'auto', height: '100%' }}>
@@ -114,6 +115,19 @@ const scrollRef = useRef<HTMLDivElement>(null)
     rowHeight={200}
     virtualize
     scrollContainerRef={scrollRef}
+    renderItem={...}
+  />
+</div>
+
+// useState — useful when the ref needs to be a reactive dependency
+const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
+
+<div ref={setScrollEl} style={{ overflowY: 'auto', height: '100%' }}>
+  <TesseraGallery
+    items={photos}
+    rowHeight={200}
+    virtualize
+    scrollContainerRef={scrollEl}
     renderItem={...}
   />
 </div>

@@ -1,7 +1,7 @@
-import type { ReactEventHandler, ReactNode, RefObject } from 'react'
+import type { ReactEventHandler, ReactNode } from 'react'
 
 import { useTesseraGallery } from './useTesseraGallery'
-import type { GalleryItem, LayoutOptions } from './types'
+import type { GalleryItem, LayoutOptions, ScrollContainerRef } from './types'
 
 type Props<T> = {
   items: GalleryItem<T>[]
@@ -10,7 +10,7 @@ type Props<T> = {
     layout: { width: number; height: number; loaded: boolean },
     handlers: { onLoad: ReactEventHandler<HTMLImageElement> },
   ) => ReactNode
-  scrollContainerRef?: RefObject<HTMLElement | null>
+  scrollContainerRef?: ScrollContainerRef
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...options }: Props<T>): ReactNode {

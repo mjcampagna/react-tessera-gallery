@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 
+import type { ScrollContainerRef } from './types'
+
+function resolveScrollEl(ref: ScrollContainerRef | undefined): HTMLElement | null {
+  if (ref == null) return null
+  if ('current' in ref) return ref.current
+  return ref
+}
+
 /**
  * Tracks the visible pixel range within a gallery container relative to its
  * top edge. Returns `{ top, bottom }` where both values are in container-local
@@ -15,7 +23,7 @@ import { useEffect, useRef, useState } from 'react'
 export function useVirtualWindow(
   containerRef: React.RefObject<HTMLElement | null>,
   enabled: boolean,
-  scrollContainerRef?: React.RefObject<HTMLElement | null>,
+  scrollContainerRef?: ScrollContainerRef,
 ): { top: number; bottom: number } | null {
   const [range, setRange] = useState<{ top: number; bottom: number } | null>(null)
   const rafIdRef = useRef<number | null>(null)
@@ -28,7 +36,7 @@ export function useVirtualWindow(
       if (!el) return
       const rect = el.getBoundingClientRect()
 
-      const sc = scrollContainerRef?.current
+      const sc = resolveScrollEl(scrollContainerRef)
       if (sc) {
         const scRect = sc.getBoundingClientRect()
         const containerTop = 0 - (rect.top - scRect.top)
@@ -50,7 +58,7 @@ export function useVirtualWindow(
     // Initial measurement
     update()
 
-    const target = scrollContainerRef?.current ?? window
+    const target = resolveScrollEl(scrollContainerRef) ?? window
     target.addEventListener('scroll', handleScroll, { passive: true })
     return () => {
       target.removeEventListener('scroll', handleScroll)

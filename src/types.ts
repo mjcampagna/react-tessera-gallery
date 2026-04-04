@@ -1,3 +1,7 @@
+import type { RefObject } from 'react'
+
+export type ScrollContainerRef = RefObject<HTMLElement | null> | HTMLElement | null
+
 export type LayoutOptions = {
   rowHeight: number | ((containerWidth: number) => number)
   gap?: number | ((containerWidth: number) => number)
