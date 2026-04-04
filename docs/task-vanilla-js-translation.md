@@ -34,7 +34,8 @@ Port the stateful logic from `useTesseraGallery` into a plain class or factory
 function. The logic is already framework-agnostic; only the state containers
 change.
 
-- [ ] `ResizeObserver` for container width — plain variable, same API
+- [ ] `ResizeObserver` for container width — plain variable, same API; guard against zero-width
+      fires (`if (width > 0)`) — iOS Safari fires with `width: 0` on initial mount
 - [ ] Aspect ratio cache — `Map`, no change
 - [ ] Loaded set — `Set`, no change
 - [ ] Append-only committed-rows logic — plain arrays, no change; drop the
@@ -67,7 +68,8 @@ never touched after creation.
       the frontier row
 - [ ] Spacer divs above/below for virtualization
 - [ ] Row elements: `display: flex`, `gap`, `justifyContent` for last-row modes
-      (`left` / `center` / `right`) — same CSS as React version
+      (`left` / `center` / `right`), `contain: layout` — same CSS as React version
+- [ ] Spacer divs: `contain: layout`
 - [ ] Item rendering: accept a `renderItem(item, { width, height, loaded })`
       callback returning an `HTMLElement`; the library sets `width`/`height` as
       inline styles (or delegates entirely to the callback)
