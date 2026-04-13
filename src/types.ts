@@ -13,6 +13,7 @@ export type LayoutOptions = {
   justifyThreshold?: number
   virtualize?: boolean
   overscan?: number
+  skipErrors?: boolean
 }
 
 export type LayoutRow = {

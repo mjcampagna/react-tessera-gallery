@@ -132,13 +132,13 @@ describe('items with known aspectRatio', () => {
 // ─── Unknown aspectRatio items ────────────────────────────────────────────────
 
 describe('items without aspectRatio', () => {
-  it('excludes them from layout before onLoad', () => {
+  it('renders with placeholder aspect ratio before onLoad', () => {
     const { result } = renderHook(() =>
       useTesseraGallery([knownItem('a', 1), unknownItem('b')], { rowHeight: 100 }),
     )
     act(() => fireResize(200))
     const total = result.current.rows.reduce((s, r) => s + r.items.length, 0)
-    expect(total).toBe(1)
+    expect(total).toBe(2)
   })
 
   it('includes them in layout once onLoad fires', () => {
@@ -180,7 +180,8 @@ describe('onLoad edge cases', () => {
     )
     act(() => fireResize(100))
     act(() => result.current.onLoad('a', 0, 100))
-    expect(result.current.rows).toEqual([])
+    // Item still renders with placeholder ar; bad onLoad does not mark it loaded
+    expect(result.current.rows[0].items[0].loaded).toBe(false)
   })
 
   it('ignores zero naturalHeight', () => {
@@ -189,7 +190,8 @@ describe('onLoad edge cases', () => {
     )
     act(() => fireResize(100))
     act(() => result.current.onLoad('a', 100, 0))
-    expect(result.current.rows).toEqual([])
+    // Item still renders with placeholder ar; bad onLoad does not mark it loaded
+    expect(result.current.rows[0].items[0].loaded).toBe(false)
   })
 
   it('does not re-add a key already in the cache', () => {
@@ -202,6 +204,77 @@ describe('onLoad edge cases', () => {
     // The item is still ar=1, width should still be 100 (container width)
     // (pre-known aspect ratio takes precedence; onLoad only sets loaded flag for known items)
     expect(result.current.rows[0].items[0].loaded).toBe(true)
+  })
+})
+
+// ─── onError ─────────────────────────────────────────────────────────────────
+
+describe('onError', () => {
+  it('renders the item with fallback ar=1 and loaded=false', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([unknownItem('a')], { rowHeight: 100 }),
+    )
+    act(() => fireResize(100))
+    act(() => result.current.onError('a'))
+    expect(result.current.rows[0].items[0].loaded).toBe(false)
+    expect(result.current.rows[0].items[0].width).toBeCloseTo(100)
+  })
+
+  it('allows subsequent items to commit past an errored item', () => {
+    // Two items: 'a' errors, 'b' has known ar. 'b' should still appear in layout.
+    const { result } = renderHook(() =>
+      useTesseraGallery([unknownItem('a'), knownItem('b', 1)], { rowHeight: 100 }),
+    )
+    act(() => fireResize(200))
+    act(() => result.current.onError('a'))
+    const total = result.current.rows.reduce((s, r) => s + r.items.length, 0)
+    expect(total).toBe(2)
+  })
+
+  it('is a no-op if aspect ratio is already cached', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([knownItem('a', 2)], { rowHeight: 100 }),
+    )
+    act(() => fireResize(200))
+    const widthBefore = result.current.rows[0].items[0].width
+    act(() => result.current.onError('a'))
+    // Pre-known ar=2 is preserved; width unchanged
+    expect(result.current.rows[0].items[0].width).toBeCloseTo(widthBefore)
+  })
+})
+
+// ─── skipErrors ──────────────────────────────────────────────────────────────
+
+describe('skipErrors', () => {
+  it('omits errored items from layout', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([unknownItem('a'), knownItem('b', 1)], { rowHeight: 100, skipErrors: true }),
+    )
+    act(() => fireResize(200))
+    act(() => result.current.onError('a'))
+    const keys = result.current.rows.flatMap(r => r.items.map(i => i.item.key))
+    expect(keys).toEqual(['b'])
+  })
+
+  it('omits errored pre-known-ar items from layout', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([knownItem('a', 2), knownItem('b', 1)], { rowHeight: 100, skipErrors: true }),
+    )
+    act(() => fireResize(200))
+    act(() => result.current.onError('a'))
+    const keys = result.current.rows.flatMap(r => r.items.map(i => i.item.key))
+    expect(keys).toEqual(['b'])
+  })
+
+  it('renders errored items normally when skipErrors is false', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([unknownItem('a'), knownItem('b', 1)], { rowHeight: 100, skipErrors: false }),
+    )
+    act(() => fireResize(200))
+    act(() => result.current.onError('a'))
+    const keys = result.current.rows.flatMap(r => r.items.map(i => i.item.key))
+    expect(keys).toContain('a')
+    expect(keys).toContain('b')
   })
 })
 

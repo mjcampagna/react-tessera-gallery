@@ -38,6 +38,7 @@ export function useTesseraGallery<T>(
   rows: ResolvedRow<T>[]
   gap: number
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
+  onError: (key: string | number) => void
   virtualWindow: VirtualWindow | null
 } {
   // ─── Hooks ─────────────────────────────────────────────────────────────────
@@ -49,6 +50,8 @@ export function useTesseraGallery<T>(
   const aspectRatioCache = useRef<Map<string | number, number>>(new Map())
   // Tracks which items have been confirmed browser-loaded via onLoad
   const loadedSet = useRef<Set<string | number>>(new Set())
+  // Tracks items whose images failed to load
+  const errorSet = useRef<Set<string | number>>(new Set())
   // Increment to trigger re-renders when cache or loadedSet changes
   const [, rerender] = useReducer(n => n + 1, 0)
 
@@ -62,6 +65,7 @@ export function useTesseraGallery<T>(
   const committedItemCountRef = useRef(0)
   const committedContainerWidthRef = useRef(0)
   const committedOptionsKeyRef = useRef('')
+  const committedErrorSetSizeRef = useRef(0)
 
   // ─── Render-time sync ──────────────────────────────────────────────────────
 
@@ -110,13 +114,40 @@ export function useTesseraGallery<T>(
     [],
   )
 
+  const onError = useCallback(
+    (key: string | number) => {
+      let changed = false
+
+      // Write a fallback aspect ratio so the frontier can commit past this item.
+      // Do not add to loadedSet — loaded stays false.
+      if (!aspectRatioCache.current.has(key)) {
+        aspectRatioCache.current.set(key, 1)
+        changed = true
+      }
+
+      // Always record the error so skipErrors can filter this item from layout.
+      if (!errorSet.current.has(key)) {
+        errorSet.current.add(key)
+        changed = true
+      }
+
+      if (changed) rerender()
+    },
+    [],
+  )
+
   // ─── Append-only layout ────────────────────────────────────────────────────
   //
   // Full rows are committed once determined and never reshuffled. Only the
   // frontier — the last partial row + any new items — is recomputed each render.
   // This prevents existing images from jumping when new items are appended.
 
-  const resolvedItems = items.filter(item => aspectRatioCache.current.has(item.key))
+  // Include all items. Items without a cached aspect ratio use 1 as a placeholder
+  // until onLoad fires with the real dimensions. When skipErrors is enabled,
+  // items that errored are omitted from layout entirely.
+  const resolvedItems = options.skipErrors
+    ? items.filter(item => !errorSet.current.has(item.key))
+    : items
 
   const resolvedRowHeight =
     typeof options.rowHeight === 'function' ? options.rowHeight(containerWidth) : options.rowHeight
@@ -126,16 +157,22 @@ export function useTesseraGallery<T>(
 
   const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
 
-  // Reset committed rows when container width, key options, or item set changes
+  const errorSetSize = errorSet.current.size
+
+  // Reset committed rows when container width, key options, or item set changes.
+  // Also reset when skipErrors is on and the error set grows — a committed item
+  // may have been filtered out, which the length-only check won't always catch.
   if (
     containerWidth !== committedContainerWidthRef.current ||
     optionsKey !== committedOptionsKeyRef.current ||
-    resolvedItems.length < committedItemCountRef.current
+    resolvedItems.length < committedItemCountRef.current ||
+    (options.skipErrors && errorSetSize !== committedErrorSetSizeRef.current)
   ) {
     committedRowsRef.current = []
     committedItemCountRef.current = 0
     committedContainerWidthRef.current = containerWidth
     committedOptionsKeyRef.current = optionsKey
+    committedErrorSetSizeRef.current = errorSetSize
   }
 
   // Compute layout only for items beyond the committed frontier
@@ -145,7 +182,7 @@ export function useTesseraGallery<T>(
     containerWidth > 0 && frontierItems.length > 0
       ? computeTesseraLayout(
           frontierItems.map(item => ({
-            aspectRatio: aspectRatioCache.current.get(item.key)!,
+            aspectRatio: aspectRatioCache.current.get(item.key) ?? 1,
           })),
           containerWidth,
           options,
@@ -166,12 +203,15 @@ export function useTesseraGallery<T>(
     })
   }
 
-  // Promote all full rows (all but last) from frontier to committed
-  if (frontierRows.length > 1) {
-    for (let i = 0; i < frontierRows.length - 1; i++) {
-      committedRowsRef.current.push(frontierRows[i])
-      committedItemCountRef.current += frontierRows[i].items.length
-    }
+  // Promote full rows from frontier to committed, stopping at the first row that
+  // contains any placeholder aspect ratio. Such rows must stay in the frontier
+  // until all their items resolve — otherwise a later onLoad could change the
+  // row's composition, invalidating everything committed after it.
+  for (let i = 0; i < frontierRows.length - 1; i++) {
+    const row = frontierRows[i]
+    if (row.items.some(({ item }) => !aspectRatioCache.current.has(item.key))) break
+    committedRowsRef.current.push(row)
+    committedItemCountRef.current += row.items.length
   }
 
   const rows: ResolvedRow<T>[] = committedRowsRef.current.map(row => toResolvedRow(row, loadedSet.current))
@@ -244,5 +284,5 @@ export function useTesseraGallery<T>(
     virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
   }
 
-  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, virtualWindow }
+  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow }
 }

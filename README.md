@@ -6,7 +6,7 @@ React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic pr
 
 - **Optimal row layout** — Knuth-Plass dynamic programming minimizes deviation from a target row height across the full item set, not just greedily row-by-row
 - **Append-only rendering** — committed rows are locked and never reshuffled as new images load; only the trailing partial row is live
-- **Incremental loading** — items without a known `aspectRatio` are held out of the layout and discovered via `onLoad`; they enter the layout with `loaded: true`
+- **Incremental loading** — items without a known `aspectRatio` render immediately with a placeholder ratio and re-layout once `onLoad` fires with real dimensions; `loaded` reflects browser load state
 - **Responsive** — `rowHeight` and `gap` accept `(containerWidth: number) => number` callbacks, re-evaluated on every container resize
 - **Panorama handling** — ultra-wide items that can't share a row get their own full-width row, exempt from height constraints
 - **Virtualization** — opt-in `virtualize` prop renders only rows near the viewport via spacer divs; no overhead when disabled
@@ -43,6 +43,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
       width={width}
       height={height}
       onLoad={handlers.onLoad}
+      onError={handlers.onError}
       style={{ opacity: loaded ? 1 : 0 }}
     />
   )}
@@ -76,6 +77,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
 | `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
+| `skipErrors` | `boolean` | `false` | When true, items whose images fire `onError` are removed from the layout entirely rather than rendered as placeholders. |
 | `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. |
 
 **`renderItem` arguments:**
@@ -86,7 +88,8 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `layout.width` | `number` | Computed pixel width for this item |
 | `layout.height` | `number` | Computed pixel height for this item |
 | `layout.loaded` | `boolean` | Whether the browser has confirmed this image loaded via `handlers.onLoad` |
-| `handlers.onLoad` | `ReactEventHandler<HTMLImageElement>` | Pass to `<img onLoad={...}>` to track load state |
+| `handlers.onLoad` | `ReactEventHandler<HTMLImageElement>` | Pass to `<img onLoad={...}>` to track load state and resolve aspect ratio |
+| `handlers.onError` | `ReactEventHandler<HTMLImageElement>` | Pass to `<img onError={...}>` to handle broken images — marks the item unloaded and (when `skipErrors` is set) removes it from layout |
 
 ---
 
@@ -180,9 +183,9 @@ type GalleryItem<T> = T & {
 }
 ```
 
-Items with a known `aspectRatio` are laid out immediately. Items without one are held out of the layout until `handlers.onLoad` fires, at which point their aspect ratio is derived from `naturalWidth / naturalHeight` and they enter the layout with `loaded: true`.
+Items with a known `aspectRatio` are laid out immediately. Items without one render immediately using a placeholder aspect ratio and re-layout once `handlers.onLoad` fires with real dimensions derived from `naturalWidth / naturalHeight`.
 
-Providing `aspectRatio` upfront is recommended when possible — it produces a stable layout from the first render and is required for virtualization to work without visible row shifts.
+Providing `aspectRatio` upfront is recommended when possible — it produces a stable layout from the first render and avoids the re-layout pass when images load.
 
 ---
 
@@ -193,7 +196,7 @@ The hook underlying `<TesseraGallery>`. Use this directly for custom rendering o
 ```ts
 import { useTesseraGallery } from '@slithy/react-tessera-gallery'
 
-const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options, scrollContainerRef)
+const { containerRef, rows, gap, onLoad, onError } = useTesseraGallery(items, options, scrollContainerRef)
 ```
 
 **Returns:**
@@ -203,7 +206,8 @@ const { containerRef, rows, gap, onLoad } = useTesseraGallery(items, options, sc
 | `containerRef` | `RefObject<HTMLDivElement \| null>` | Attach to your container element to observe its width |
 | `rows` | `ResolvedRow<T>[]` | Computed layout rows, each with `height` and `items` |
 | `gap` | `number` | Resolved gap value (useful when `gap` was passed as a callback) |
-| `onLoad` | `(key, naturalWidth, naturalHeight) => void` | Call when an image loads |
+| `onLoad` | `(key, naturalWidth, naturalHeight) => void` | Call when an image loads to resolve its aspect ratio and mark it loaded |
+| `onError` | `(key) => void` | Call when an image fails to load; writes a fallback aspect ratio so the layout can commit past it, and marks the item for removal when `skipErrors` is set |
 | `virtualWindow` | `{ firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight } \| null` | Set when `virtualize` is true; describes which rows are visible and the spacer heights needed to maintain full scroll height |
 
 ---

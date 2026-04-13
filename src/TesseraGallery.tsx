@@ -8,13 +8,13 @@ type Props<T> = {
   renderItem: (
     item: GalleryItem<T>,
     layout: { width: number; height: number; loaded: boolean },
-    handlers: { onLoad: ReactEventHandler<HTMLImageElement> },
+    handlers: { onLoad: ReactEventHandler<HTMLImageElement>; onError: ReactEventHandler<HTMLImageElement> },
   ) => ReactNode
   scrollContainerRef?: ScrollContainerRef
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...options }: Props<T>): ReactNode {
-  const { containerRef, rows, gap, onLoad, virtualWindow } = useTesseraGallery(items, options, scrollContainerRef)
+  const { containerRef, rows, gap, onLoad, onError, virtualWindow } = useTesseraGallery(items, options, scrollContainerRef)
   const { lastRow = 'left' } = options
 
   const firstIndex = virtualWindow?.firstIndex ?? 0
@@ -43,6 +43,7 @@ export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...op
                 {
                   onLoad: e =>
                     onLoad(item.key, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight),
+                  onError: () => onError(item.key),
                 },
               )
             )}
