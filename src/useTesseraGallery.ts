@@ -66,6 +66,11 @@ export function useTesseraGallery<T>(
   const committedContainerWidthRef = useRef(0)
   const committedOptionsKeyRef = useRef('')
   const committedErrorSetSizeRef = useRef(0)
+  // Tracks the item count at the start of the first provisionally committed row
+  // (a row committed using a placeholder aspect ratio). Infinity when none exist.
+  const firstProvisionalRowStartCountRef = useRef<number>(Infinity)
+  // Keys of items committed with placeholder aspect ratios, pending real values.
+  const provisionalCommittedKeysRef = useRef<Set<string | number>>(new Set())
 
   // ─── Render-time sync ──────────────────────────────────────────────────────
 
@@ -92,6 +97,26 @@ export function useTesseraGallery<T>(
 
   // ─── Callbacks ─────────────────────────────────────────────────────────────
 
+  // Roll back committed rows to before the first provisional row, so that
+  // items which were committed with placeholder ratios can be re-laid-out once
+  // real aspect ratios arrive via onLoad. Rows before the provisional zone are
+  // preserved — only the provisional zone and beyond are reset.
+  const rollbackProvisionalRows = useCallback(() => {
+    const boundary = firstProvisionalRowStartCountRef.current
+    if (boundary === Infinity) return
+    let countSoFar = 0
+    let rowCount = 0
+    for (const row of committedRowsRef.current) {
+      if (countSoFar === boundary) break
+      countSoFar += row.items.length
+      rowCount++
+    }
+    committedRowsRef.current = committedRowsRef.current.slice(0, rowCount)
+    committedItemCountRef.current = boundary
+    firstProvisionalRowStartCountRef.current = Infinity
+    provisionalCommittedKeysRef.current.clear()
+  }, [])
+
   const onLoad = useCallback(
     (key: string | number, naturalWidth: number, naturalHeight: number) => {
       if (naturalWidth <= 0 || naturalHeight <= 0) return
@@ -102,6 +127,11 @@ export function useTesseraGallery<T>(
       if (!aspectRatioCache.current.has(key)) {
         aspectRatioCache.current.set(key, naturalWidth / naturalHeight)
         changed = true
+        // If this item was provisionally committed with a placeholder ratio,
+        // roll back to before that row so it can be re-laid-out accurately.
+        if (provisionalCommittedKeysRef.current.has(key)) {
+          rollbackProvisionalRows()
+        }
       }
 
       if (!loadedSet.current.has(key)) {
@@ -111,18 +141,21 @@ export function useTesseraGallery<T>(
 
       if (changed) rerender()
     },
-    [],
+    [rollbackProvisionalRows],
   )
 
   const onError = useCallback(
     (key: string | number) => {
       let changed = false
 
-      // Write a fallback aspect ratio so the frontier can commit past this item.
+      // Write a fallback aspect ratio for the errored item so layout can include it.
       // Do not add to loadedSet — loaded stays false.
       if (!aspectRatioCache.current.has(key)) {
         aspectRatioCache.current.set(key, 1)
         changed = true
+        if (provisionalCommittedKeysRef.current.has(key)) {
+          rollbackProvisionalRows()
+        }
       }
 
       // Always record the error so skipErrors can filter this item from layout.
@@ -133,7 +166,7 @@ export function useTesseraGallery<T>(
 
       if (changed) rerender()
     },
-    [],
+    [rollbackProvisionalRows],
   )
 
   // ─── Append-only layout ────────────────────────────────────────────────────
@@ -173,6 +206,8 @@ export function useTesseraGallery<T>(
     committedContainerWidthRef.current = containerWidth
     committedOptionsKeyRef.current = optionsKey
     committedErrorSetSizeRef.current = errorSetSize
+    firstProvisionalRowStartCountRef.current = Infinity
+    provisionalCommittedKeysRef.current.clear()
   }
 
   // Compute layout only for items beyond the committed frontier
@@ -203,15 +238,25 @@ export function useTesseraGallery<T>(
     })
   }
 
-  // Promote full rows from frontier to committed, stopping at the first row that
-  // contains any placeholder aspect ratio. Such rows must stay in the frontier
-  // until all their items resolve — otherwise a later onLoad could change the
-  // row's composition, invalidating everything committed after it.
+  // Promote full rows from frontier to committed. Rows containing placeholder
+  // aspect ratios (items not yet in cache) are committed immediately so the
+  // gallery renders without delay. Their keys are tracked as provisional so
+  // that when a real ratio arrives via onLoad, committed rows roll back to
+  // before the first provisional row and re-layout with the accurate value.
+  // Rows before the provisional zone are never disturbed.
   for (let i = 0; i < frontierRows.length - 1; i++) {
     const row = frontierRows[i]
-    if (row.items.some(({ item }) => !aspectRatioCache.current.has(item.key))) break
+    const rowStartCount = committedItemCountRef.current
     committedRowsRef.current.push(row)
     committedItemCountRef.current += row.items.length
+    for (const { item } of row.items) {
+      if (!aspectRatioCache.current.has(item.key)) {
+        provisionalCommittedKeysRef.current.add(item.key)
+        if (firstProvisionalRowStartCountRef.current === Infinity) {
+          firstProvisionalRowStartCountRef.current = rowStartCount
+        }
+      }
+    }
   }
 
   const rows: ResolvedRow<T>[] = committedRowsRef.current.map(row => toResolvedRow(row, loadedSet.current))
