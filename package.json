@@ -1,6 +1,6 @@
 {
   "name": "@slithy/react-tessera-gallery",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "React justified gallery with optimal line-breaking layout.",
   "type": "module",
   "exports": {
