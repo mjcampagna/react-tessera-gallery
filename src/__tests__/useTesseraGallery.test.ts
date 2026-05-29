@@ -348,3 +348,49 @@ describe('navigation', () => {
     expect(typeof result.current.handleItemKeyDown).toBe('function')
   })
 })
+
+// ─── Controlled focusedIndex ─────────────────────────────────────────────────
+
+describe('controlled focusedIndex', () => {
+  it('returns the provided focusedIndex instead of internal state', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery(KEYS.slice(0, 3).map(k => makeItem(k, 1)), { ...OPTIONS, focusedIndex: 2 }),
+    )
+    expect(result.current.focusedIndex).toBe(2)
+  })
+
+  it('does not update internal state when handleItemFocus is called in controlled mode', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery(KEYS.slice(0, 3).map(k => makeItem(k, 1)), { ...OPTIONS, focusedIndex: 0 }),
+    )
+    fireResize(WIDTH)
+    act(() => { result.current.handleItemFocus(2) })
+    // External prop owns the seat — effectiveFocusedIndex stays at the prop value
+    expect(result.current.focusedIndex).toBe(0)
+  })
+
+  it('calls onFocusedIndexChange when handleItemFocus is called in controlled mode', () => {
+    const onFocusedIndexChange = vi.fn()
+    const { result } = renderHook(() =>
+      useTesseraGallery(
+        KEYS.slice(0, 3).map(k => makeItem(k, 1)),
+        { ...OPTIONS, focusedIndex: 0, onFocusedIndexChange },
+      ),
+    )
+    fireResize(WIDTH)
+    act(() => { result.current.handleItemFocus(2) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(2)
+  })
+
+  it('calls onFocusedIndexChange in uncontrolled mode too', () => {
+    const onFocusedIndexChange = vi.fn()
+    const { result } = renderHook(() =>
+      useTesseraGallery(KEYS.slice(0, 3).map(k => makeItem(k, 1)), { ...OPTIONS, onFocusedIndexChange }),
+    )
+    fireResize(WIDTH)
+    act(() => { result.current.handleItemFocus(1) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(1)
+    // Internal state also updated in uncontrolled mode
+    expect(result.current.focusedIndex).toBe(1)
+  })
+})

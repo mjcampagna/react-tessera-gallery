@@ -262,6 +262,22 @@ describe('virtualization', () => {
     return Array.from({ length: count }, (_, i) => photo(`${i}`, 1))
   }
 
+  it('uses rowHeight*4 as the default overscan', () => {
+    // overscan = 100*4 = 400, visibleBottom = 100+400 = 500 → rows 0–4 → 5 items
+    render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        virtualize
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    expect(screen.getAllByTestId('img')).toHaveLength(5)
+  })
+
   it('renders all items when virtualize is not set', () => {
     render(
       <TesseraGallery
@@ -648,5 +664,93 @@ describe('keyboard navigation', () => {
     act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight', metaKey: true }) })
     expect(focusedByKey['a']).toBe(true)
     expect(focusedByKey['b']).toBe(false)
+  })
+})
+
+// ─── controlled focusedIndex ─────────────────────────────────────────────────
+
+describe('navigable — controlled focusedIndex', () => {
+  // 3 square items in 300px container → 1 row of 3: [a=0, b=1, c=2]
+
+  it('uses the provided focusedIndex instead of internal state', () => {
+    const focusedByKey: Record<string, boolean> = {}
+    render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1), photo('c', 1)]}
+        rowHeight={100}
+        navigable
+        focusedIndex={2}
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img key={item.key} src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(300))
+    expect(focusedByKey['a']).toBe(false)
+    expect(focusedByKey['b']).toBe(false)
+    expect(focusedByKey['c']).toBe(true)
+  })
+
+  it('sets tabIndex=0 on the externally controlled cell', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1), photo('c', 1)]}
+        rowHeight={100}
+        navigable
+        focusedIndex={1}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(300))
+    const cells = container.querySelectorAll('[role="gridcell"]') as NodeListOf<HTMLElement>
+    expect(cells[0].tabIndex).toBe(-1)
+    expect(cells[1].tabIndex).toBe(0)
+    expect(cells[2].tabIndex).toBe(-1)
+  })
+
+  it('calls onFocusedIndexChange on keyboard navigation but does not update internal state', () => {
+    const onFocusedIndexChange = vi.fn()
+    const focusedByKey: Record<string, boolean> = {}
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        focusedIndex={0}
+        onFocusedIndexChange={onFocusedIndexChange}
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img key={item.key} src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    act(() => { fireEvent.keyDown(container.querySelector('[data-tessera-index="0"]') as HTMLElement, { key: 'ArrowRight' }) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(1)
+    // Prop still says 0 — internal state did not change
+    expect(focusedByKey['a']).toBe(true)
+    expect(focusedByKey['b']).toBe(false)
+  })
+
+  it('calls onFocusedIndexChange when a cell receives focus', () => {
+    const onFocusedIndexChange = vi.fn()
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        focusedIndex={0}
+        onFocusedIndexChange={onFocusedIndexChange}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(200))
+    act(() => { fireEvent.focus(container.querySelector('[data-tessera-index="1"]') as HTMLElement) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(1)
   })
 })
