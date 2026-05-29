@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 
 import { TesseraGallery } from '../TesseraGallery'
 import type { GalleryItem } from '../types'
@@ -359,5 +359,289 @@ describe('virtualization', () => {
     expect(spacers).toHaveLength(2)
     expect(spacers[0].style.height).toBe('300px')
     expect(spacers[1].style.height).toBe('200px')
+  })
+})
+
+// ─── padding ─────────────────────────────────────────────────────────────────
+
+describe('padding', () => {
+  it('applies padding style to the container', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1)]}
+        rowHeight={100}
+        padding={20}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outer = container.querySelector('div') as HTMLElement
+    expect(outer.style.padding).toBe('20px')
+  })
+
+  it('does not apply padding style when padding is not set', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1)]}
+        rowHeight={100}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outer = container.querySelector('div') as HTMLElement
+    expect(outer.style.padding).toBe('')
+  })
+})
+
+// ─── navigable ───────────────────────────────────────────────────────────────
+
+describe('navigable — ARIA', () => {
+  it('adds role=grid and aria-rowcount to the container', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1)]}
+        rowHeight={100}
+        navigable
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outer = container.querySelector('div') as HTMLElement
+    expect(outer.getAttribute('role')).toBe('grid')
+    expect(outer.getAttribute('aria-rowcount')).toBe('1')
+  })
+
+  it('does not add ARIA to the container when navigable is not set', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1)]}
+        rowHeight={100}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outer = container.querySelector('div') as HTMLElement
+    expect(outer.getAttribute('role')).toBeNull()
+  })
+
+  it('adds role=row and aria-rowindex to row divs', () => {
+    // 2 square items in 100px container → 2 rows of 1
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const rows = container.querySelectorAll('[role="row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].getAttribute('aria-rowindex')).toBe('1')
+    expect(rows[1].getAttribute('aria-rowindex')).toBe('2')
+  })
+
+  it('adds role=gridcell, aria-colindex, and data-tessera-index to item wrappers', () => {
+    // 2 square items in 200px container at rowHeight=100 → 1 row of 2
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(200))
+    const cells = container.querySelectorAll('[role="gridcell"]')
+    expect(cells).toHaveLength(2)
+    expect(cells[0].getAttribute('aria-colindex')).toBe('1')
+    expect(cells[0].getAttribute('data-tessera-index')).toBe('0')
+    expect(cells[1].getAttribute('aria-colindex')).toBe('2')
+    expect(cells[1].getAttribute('data-tessera-index')).toBe('1')
+  })
+
+  it('first cell has tabIndex=0 and others have tabIndex=-1 initially', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(200))
+    const cells = container.querySelectorAll('[role="gridcell"]') as NodeListOf<HTMLElement>
+    expect(cells[0].tabIndex).toBe(0)
+    expect(cells[1].tabIndex).toBe(-1)
+  })
+})
+
+describe('navigable — focused prop', () => {
+  it('passes focused=true to the initially focused item and false to others', () => {
+    const focusedByKey: Record<string, boolean> = {}
+    render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img key={item.key} src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    expect(focusedByKey['a']).toBe(true)
+    expect(focusedByKey['b']).toBe(false)
+  })
+
+  it('passes focused=false for all items when navigable is not set', () => {
+    const focused: boolean[] = []
+    render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        renderItem={(item, layout) => {
+          focused.push(layout.focused)
+          return <img key={item.key} src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    expect(focused.every(f => !f)).toBe(true)
+  })
+})
+
+// ─── keyboard navigation ─────────────────────────────────────────────────────
+
+describe('keyboard navigation', () => {
+  // 4 square items (AR=1) in a 200px container at rowHeight=100
+  // → row 0: [a=0, b=1], row 1: [c=2, d=3]
+
+  function setup(onActivate?: (index: number, shiftKey: boolean) => void) {
+    const focusedByKey: Record<string, boolean> = {}
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1), photo('c', 1), photo('d', 1)]}
+        rowHeight={100}
+        navigable
+        onActivate={onActivate}
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    return { container, focusedByKey }
+  }
+
+  function cell(container: HTMLElement, index: number): HTMLElement {
+    return container.querySelector(`[data-tessera-index="${index}"]`) as HTMLElement
+  }
+
+  it('ArrowRight advances focus to the next item', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight' }) })
+    expect(focusedByKey['b']).toBe(true)
+    expect(focusedByKey['a']).toBe(false)
+  })
+
+  it('ArrowLeft retreats focus to the previous item', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight' }) })
+    act(() => { fireEvent.keyDown(cell(container, 1), { key: 'ArrowLeft' }) })
+    expect(focusedByKey['a']).toBe(true)
+  })
+
+  it('ArrowDown moves to the same column in the next row', () => {
+    // From a (row 0, col 0) → c (row 1, col 0)
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowDown' }) })
+    expect(focusedByKey['c']).toBe(true)
+  })
+
+  it('ArrowUp moves to the same column in the previous row', () => {
+    // From c (row 1, col 0) → a (row 0, col 0)
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowDown' }) })
+    act(() => { fireEvent.keyDown(cell(container, 2), { key: 'ArrowUp' }) })
+    expect(focusedByKey['a']).toBe(true)
+  })
+
+  it('Home moves focus to the first item in the current row', () => {
+    // From b (row 0, col 1) → a (row 0, col 0)
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight' }) })
+    act(() => { fireEvent.keyDown(cell(container, 1), { key: 'Home' }) })
+    expect(focusedByKey['a']).toBe(true)
+  })
+
+  it('End moves focus to the last item in the current row', () => {
+    // From a (row 0, col 0) → b (row 0, col 1)
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'End' }) })
+    expect(focusedByKey['b']).toBe(true)
+  })
+
+  it('Ctrl+Home moves focus to the first item overall', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'End', ctrlKey: true }) })
+    act(() => { fireEvent.keyDown(cell(container, 3), { key: 'Home', ctrlKey: true }) })
+    expect(focusedByKey['a']).toBe(true)
+  })
+
+  it('Ctrl+End moves focus to the last item overall', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'End', ctrlKey: true }) })
+    expect(focusedByKey['d']).toBe(true)
+  })
+
+  it('does not advance past the last item', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'End', ctrlKey: true }) })
+    act(() => { fireEvent.keyDown(cell(container, 3), { key: 'ArrowRight' }) })
+    expect(focusedByKey['d']).toBe(true)
+  })
+
+  it('does not retreat past the first item', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowLeft' }) })
+    expect(focusedByKey['a']).toBe(true)
+  })
+
+  it('Space calls onActivate with item index and shiftKey', () => {
+    const onActivate = vi.fn()
+    const { container } = setup(onActivate)
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: ' ', shiftKey: true }) })
+    expect(onActivate).toHaveBeenCalledWith(0, true)
+  })
+
+  it('Enter calls onActivate with item index', () => {
+    const onActivate = vi.fn()
+    const { container } = setup(onActivate)
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'Enter' }) })
+    expect(onActivate).toHaveBeenCalledWith(0, false)
+  })
+
+  it('metaKey + ArrowRight does not navigate', () => {
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight', metaKey: true }) })
+    expect(focusedByKey['a']).toBe(true)
+    expect(focusedByKey['b']).toBe(false)
   })
 })

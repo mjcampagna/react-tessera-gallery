@@ -11,9 +11,12 @@ export type LayoutOptions = {
   maxShrink?: number
   maxStretch?: number
   justifyThreshold?: number
+  padding?: number
   virtualize?: boolean
   overscan?: number
   skipErrors?: boolean
+  navigable?: boolean
+  onActivate?: (index: number, shiftKey: boolean) => void
 }
 
 export type LayoutRow = {

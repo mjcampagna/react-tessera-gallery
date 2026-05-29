@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useReducer, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type RefObject } from 'react'
+import type React from 'react'
 
 import { computeTesseraLayout } from './computeTesseraLayout'
-import { useVirtualWindow } from './useVirtualWindow'
+import { useVirtualWindow, resolveScrollEl } from './useVirtualWindow'
 import type { GalleryItem, LayoutOptions, ResolvedRow, ScrollContainerRef } from './types'
 
 type CommittedRow<T> = {
@@ -40,11 +41,16 @@ export function useTesseraGallery<T>(
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
   onError: (key: string | number) => void
   virtualWindow: VirtualWindow | null
+  focusedIndex: number
+  handleItemFocus: (index: number) => void
+  handleItemKeyDown: (itemIndex: number, e: React.KeyboardEvent) => void
 } {
   // ─── Hooks ─────────────────────────────────────────────────────────────────
 
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerWidth, setContainerWidth] = useState(0)
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const pendingFocusRef = useRef<number | null>(null)
 
   // Aspect ratio cache — populated from items with known aspectRatio and via onLoad
   const aspectRatioCache = useRef<Map<string | number, number>>(new Map())
@@ -307,11 +313,14 @@ export function useTesseraGallery<T>(
     }
     const totalHeight = cumTop - resolvedGap
 
+    const padding = options.padding ?? 0
+
     let firstIndex = stableRows.length
     let lastIndex = -1
     for (let i = 0; i < stableRows.length; i++) {
-      const rowBottom = rowTops[i] + stableRows[i].height
-      if (rowBottom > visibleTop && rowTops[i] < visibleBottom) {
+      const rowTop = rowTops[i] + padding
+      const rowBottom = rowTop + stableRows[i].height
+      if (rowBottom > visibleTop && rowTop < visibleBottom) {
         if (firstIndex === stableRows.length) firstIndex = i
         lastIndex = i
       }
@@ -329,5 +338,125 @@ export function useTesseraGallery<T>(
     virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
   }
 
-  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow }
+  // ─── Navigation ────────────────────────────────────────────────────────────
+
+  function scrollToRow(rowIndex: number): void {
+    const padding = options.padding ?? 0
+    const stableRows = prevRowsRef.current
+    let rowTop = padding
+    for (let i = 0; i < rowIndex; i++) {
+      rowTop += stableRows[i].height + resolvedGap
+    }
+    const rowH = stableRows[rowIndex]?.height ?? 0
+    const rowBottom = rowTop + rowH
+    const scrollEl = resolveScrollEl(scrollContainerRef)
+    if (scrollEl) {
+      if (rowTop < scrollEl.scrollTop) {
+        scrollEl.scrollTop = rowTop
+      } else if (rowBottom > scrollEl.scrollTop + scrollEl.clientHeight) {
+        scrollEl.scrollTop = rowBottom - scrollEl.clientHeight
+      }
+    } else {
+      const containerEl = containerRef.current
+      if (!containerEl) return
+      const absTop = containerEl.getBoundingClientRect().top + window.scrollY + rowTop
+      const absBottom = absTop + rowH
+      if (absTop < window.scrollY) {
+        window.scrollTo({ top: absTop })
+      } else if (absBottom > window.scrollY + window.innerHeight) {
+        window.scrollTo({ top: absBottom - window.innerHeight })
+      }
+    }
+  }
+
+  function findRowCol(flatIndex: number): { rowIndex: number; colIndex: number; rowStart: number; rowLen: number } {
+    const stableRows = prevRowsRef.current
+    let count = 0
+    for (let r = 0; r < stableRows.length; r++) {
+      const len = stableRows[r].items.length
+      if (flatIndex < count + len) {
+        return { rowIndex: r, colIndex: flatIndex - count, rowStart: count, rowLen: len }
+      }
+      count += len
+    }
+    const lastLen = stableRows[stableRows.length - 1]?.items.length ?? 0
+    return { rowIndex: stableRows.length - 1, colIndex: lastLen - 1, rowStart: count - lastLen, rowLen: lastLen }
+  }
+
+  function navigateTo(newIndex: number): void {
+    const stableRows = prevRowsRef.current
+    const displayedCount = stableRows.reduce((sum, row) => sum + row.items.length, 0)
+    if (displayedCount === 0) return
+    const clamped = Math.max(0, Math.min(newIndex, displayedCount - 1))
+    setFocusedIndex(clamped)
+    const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${clamped}"]`)
+    if (target) {
+      target.focus()
+    } else {
+      scrollToRow(findRowCol(clamped).rowIndex)
+      pendingFocusRef.current = clamped
+    }
+  }
+
+  function handleItemKeyDown(itemIndex: number, e: React.KeyboardEvent): void {
+    const stableRows = prevRowsRef.current
+    const displayedCount = stableRows.reduce((sum, row) => sum + row.items.length, 0)
+    const { rowIndex, colIndex, rowStart, rowLen } = findRowCol(itemIndex)
+    const rowEnd = rowStart + rowLen - 1
+    switch (e.key) {
+      case 'ArrowRight':
+        if (e.metaKey) break
+        e.preventDefault()
+        navigateTo(itemIndex + 1)
+        break
+      case 'ArrowLeft':
+        if (e.metaKey) break
+        e.preventDefault()
+        navigateTo(itemIndex - 1)
+        break
+      case 'ArrowDown': {
+        if (e.metaKey) break
+        e.preventDefault()
+        if (rowIndex + 1 < stableRows.length) {
+          const nextRowLen = stableRows[rowIndex + 1].items.length
+          navigateTo(rowEnd + 1 + Math.min(colIndex, nextRowLen - 1))
+        }
+        break
+      }
+      case 'ArrowUp': {
+        if (e.metaKey) break
+        e.preventDefault()
+        if (rowIndex > 0) {
+          const prevRowLen = stableRows[rowIndex - 1].items.length
+          navigateTo(rowStart - prevRowLen + Math.min(colIndex, prevRowLen - 1))
+        }
+        break
+      }
+      case 'Home':
+        e.preventDefault()
+        navigateTo(e.ctrlKey ? 0 : rowStart)
+        break
+      case 'End':
+        e.preventDefault()
+        navigateTo(e.ctrlKey ? displayedCount - 1 : rowEnd)
+        break
+      case ' ':
+      case 'Enter':
+        e.preventDefault()
+        options.onActivate?.(itemIndex, e.shiftKey)
+        break
+    }
+  }
+
+  // Runs after every render — completes a pending focus once the target element appears in the DOM
+  useLayoutEffect(() => {
+    if (pendingFocusRef.current === null) return
+    const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${pendingFocusRef.current}"]`)
+    if (target) {
+      target.focus()
+      pendingFocusRef.current = null
+    }
+  })
+
+  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex, handleItemFocus: setFocusedIndex, handleItemKeyDown }
 }

@@ -326,3 +326,25 @@ describe('options', () => {
     expect(result.current.gap).toBe(0)
   })
 })
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+
+describe('navigation', () => {
+  it('returns focusedIndex starting at 0', () => {
+    const { result } = renderHook(() => useTesseraGallery([makeItem('0', 1)], OPTIONS))
+    expect(result.current.focusedIndex).toBe(0)
+  })
+
+  it('handleItemFocus updates focusedIndex', () => {
+    const items = KEYS.slice(0, 3).map(k => makeItem(k, 1))
+    const { result } = renderHook(() => useTesseraGallery(items, OPTIONS))
+    fireResize(WIDTH)
+    act(() => { result.current.handleItemFocus(2) })
+    expect(result.current.focusedIndex).toBe(2)
+  })
+
+  it('returns handleItemKeyDown as a function', () => {
+    const { result } = renderHook(() => useTesseraGallery([makeItem('0', 1)], OPTIONS))
+    expect(typeof result.current.handleItemKeyDown).toBe('function')
+  })
+})

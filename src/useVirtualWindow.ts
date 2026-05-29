@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { ScrollContainerRef } from './types'
 
-function resolveScrollEl(ref: ScrollContainerRef | undefined): HTMLElement | null {
+export function resolveScrollEl(ref: ScrollContainerRef | undefined): HTMLElement | null {
   if (ref == null) return null
   if ('current' in ref) return ref.current
   return ref
@@ -60,8 +60,19 @@ export function useVirtualWindow(
 
     const target = resolveScrollEl(scrollContainerRef) ?? window
     target.addEventListener('scroll', handleScroll, { passive: true })
+
+    let ro: ResizeObserver | null = null
+    if (target !== window) {
+      ro = new ResizeObserver(update)
+      ro.observe(target as HTMLElement)
+    } else {
+      window.addEventListener('resize', handleScroll, { passive: true })
+    }
+
     return () => {
       target.removeEventListener('scroll', handleScroll)
+      if (target === window) window.removeEventListener('resize', handleScroll)
+      ro?.disconnect()
       if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current)
     }
   }, [enabled, containerRef, scrollContainerRef])
