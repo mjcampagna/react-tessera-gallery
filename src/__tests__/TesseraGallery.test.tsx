@@ -250,8 +250,9 @@ describe('lastRow alignment', () => {
 
 describe('virtualization', () => {
   // Setup: 10 square items, rowHeight=100, no gap, container=100px
-  // → 10 rows × 100px = 1000px total height
-  // OVERSCAN=300, innerHeight=100 → visibleBottom=400 → rows 0–3 visible initially (4 items)
+  // → 10 rows × 100px = 1000px total height, window.innerHeight=100
+  // Tests that verify specific row counts pass overscan=200 explicitly to stay
+  // independent of the default (rowHeight * 4).
 
   beforeEach(() => {
     Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
@@ -276,13 +277,14 @@ describe('virtualization', () => {
   })
 
   it('renders only rows within the visible window + overscan', () => {
-    // overscan = rowHeight(100) * 2 = 200, visibleBottom = innerHeight(100) + 200 = 300
+    // overscan=200: visibleBottom = innerHeight(100) + 200 = 300
     // rows 0–2 (tops 0,100,200 < 300) visible → 3 items
     render(
       <TesseraGallery
         items={makeItems(10)}
         rowHeight={100}
         virtualize
+        overscan={200}
         renderItem={(item, { width, height }) => (
           <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
         )}
@@ -293,12 +295,13 @@ describe('virtualization', () => {
   })
 
   it('renders a bottom spacer for off-screen rows below', () => {
-    // Rows 0–2 visible (300px used), rows 3–9 off-screen → bottom spacer = 700px
+    // overscan=200: rows 0–2 visible, rows 3–9 off-screen → bottom spacer = 700px
     const { container } = render(
       <TesseraGallery
         items={makeItems(10)}
         rowHeight={100}
         virtualize
+        overscan={200}
         renderItem={(item, { width, height }) => (
           <img key={item.key} src={item.src} width={width} height={height} alt="" />
         )}
@@ -319,6 +322,7 @@ describe('virtualization', () => {
         items={makeItems(10)}
         rowHeight={100}
         virtualize
+        overscan={200}
         renderItem={(item, { width, height }) => (
           <img key={item.key} src={item.src} width={width} height={height} data-testid="img" alt="" />
         )}
@@ -328,7 +332,7 @@ describe('virtualization', () => {
     expect(screen.getAllByTestId('img')).toHaveLength(3)
 
     // Scroll down 500px: rect.top=-500 → containerTop=500
-    // visibleTop=300, visibleBottom=800 → rows 3–7 visible (5 items)
+    // overscan=200: visibleTop=300, visibleBottom=800 → rows 3–7 visible (5 items)
     const outerDiv = container.firstChild as HTMLElement
     outerDiv.getBoundingClientRect = vi.fn().mockReturnValue({ top: -500 })
     act(() => window.dispatchEvent(new Event('scroll')))
@@ -337,12 +341,13 @@ describe('virtualization', () => {
   })
 
   it('renders top and bottom spacers when scrolled past the first row', () => {
-    // After scroll: rows 3–7 visible → top spacer=300px (rows 0–2), bottom spacer=200px (rows 8–9)
+    // overscan=200, after scroll: rows 3–7 visible → top spacer=300px, bottom spacer=200px
     const { container } = render(
       <TesseraGallery
         items={makeItems(10)}
         rowHeight={100}
         virtualize
+        overscan={200}
         renderItem={(item, { width, height }) => (
           <img key={item.key} src={item.src} width={width} height={height} alt="" />
         )}

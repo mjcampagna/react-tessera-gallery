@@ -300,7 +300,7 @@ export function useTesseraGallery<T>(
 
   if (options.virtualize && virtualRange !== null && prevRowsRef.current.length > 0) {
     const stableRows = prevRowsRef.current
-    const overscan = options.overscan ?? resolvedRowHeight * 2
+    const overscan = options.overscan ?? resolvedRowHeight * 4
     const visibleTop = virtualRange.top - overscan
     const visibleBottom = virtualRange.bottom + overscan
 
@@ -339,6 +339,8 @@ export function useTesseraGallery<T>(
   }
 
   // ─── Navigation ────────────────────────────────────────────────────────────
+
+  const isControlled = options.focusedIndex !== undefined
 
   function scrollToRow(rowIndex: number): void {
     const padding = options.padding ?? 0
@@ -388,7 +390,8 @@ export function useTesseraGallery<T>(
     const displayedCount = stableRows.reduce((sum, row) => sum + row.items.length, 0)
     if (displayedCount === 0) return
     const clamped = Math.max(0, Math.min(newIndex, displayedCount - 1))
-    setFocusedIndex(clamped)
+    if (!isControlled) setFocusedIndex(clamped)
+    options.onFocusedIndexChange?.(clamped)
     const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${clamped}"]`)
     if (target) {
       target.focus()
@@ -448,6 +451,13 @@ export function useTesseraGallery<T>(
     }
   }
 
+  const effectiveFocusedIndex = isControlled ? options.focusedIndex! : focusedIndex
+
+  function handleItemFocus(index: number): void {
+    if (!isControlled) setFocusedIndex(index)
+    options.onFocusedIndexChange?.(index)
+  }
+
   // Runs after every render — completes a pending focus once the target element appears in the DOM
   useLayoutEffect(() => {
     if (pendingFocusRef.current === null) return
@@ -458,5 +468,5 @@ export function useTesseraGallery<T>(
     }
   })
 
-  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex, handleItemFocus: setFocusedIndex, handleItemKeyDown }
+  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex: effectiveFocusedIndex, handleItemFocus, handleItemKeyDown }
 }

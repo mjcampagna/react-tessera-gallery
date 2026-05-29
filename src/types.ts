@@ -16,6 +16,8 @@ export type LayoutOptions = {
   overscan?: number
   skipErrors?: boolean
   navigable?: boolean
+  focusedIndex?: number
+  onFocusedIndexChange?: (index: number) => void
   onActivate?: (index: number, shiftKey: boolean) => void
 }
 
