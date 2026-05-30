@@ -1,6 +1,6 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Commands
 
@@ -73,4 +73,4 @@ After pushing changes here, run `sync` + `build` in slithy to update the publish
 
 **Imports:** No file extensions on relative imports (`.js`, `.ts`) — `moduleResolution: Bundler` handles this.
 
-TypeScript and React conventions are defined in `~/Code/CLAUDE.md` and apply here.
+TypeScript and React conventions are defined in `~/Code/AGENTS.md` and apply here.

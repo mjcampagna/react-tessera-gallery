@@ -29,6 +29,14 @@ type VirtualWindow = {
   bottomSpacerHeight: number
 }
 
+function finitePositive(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function finiteNonNegative(value: number, fallback = 0): number {
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
 
 export function useTesseraGallery<T>(
   items: GalleryItem<T>[],
@@ -83,7 +91,7 @@ export function useTesseraGallery<T>(
   // Sync items with pre-known aspectRatios into cache every render.
   // Pre-known aspectRatio takes precedence — onLoad will not overwrite it.
   for (const item of items) {
-    if (item.aspectRatio !== undefined) {
+    if (item.aspectRatio !== undefined && Number.isFinite(item.aspectRatio) && item.aspectRatio > 0) {
       aspectRatioCache.current.set(item.key, item.aspectRatio)
     }
   }
@@ -125,7 +133,12 @@ export function useTesseraGallery<T>(
 
   const onLoad = useCallback(
     (key: string | number, naturalWidth: number, naturalHeight: number) => {
-      if (naturalWidth <= 0 || naturalHeight <= 0) return
+      if (
+        !Number.isFinite(naturalWidth) ||
+        !Number.isFinite(naturalHeight) ||
+        naturalWidth <= 0 ||
+        naturalHeight <= 0
+      ) return
 
       let changed = false
 
@@ -188,11 +201,13 @@ export function useTesseraGallery<T>(
     ? items.filter(item => !errorSet.current.has(item.key))
     : items
 
-  const resolvedRowHeight =
+  const rawRowHeight =
     typeof options.rowHeight === 'function' ? options.rowHeight(containerWidth) : options.rowHeight
+  const resolvedRowHeight = finitePositive(rawRowHeight, 0)
 
-  const resolvedGap =
+  const rawGap =
     typeof options.gap === 'function' ? options.gap(containerWidth) : (options.gap ?? 0)
+  const resolvedGap = finiteNonNegative(rawGap)
 
   const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
 
@@ -226,7 +241,7 @@ export function useTesseraGallery<T>(
             aspectRatio: aspectRatioCache.current.get(item.key) ?? 1,
           })),
           containerWidth,
-          options,
+          { ...options, rowHeight: resolvedRowHeight, gap: resolvedGap },
         )
       : []
 

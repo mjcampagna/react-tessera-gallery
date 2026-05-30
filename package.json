@@ -3,6 +3,7 @@
   "version": "0.7.0",
   "description": "React justified gallery with optimal line-breaking layout.",
   "type": "module",
+  "packageManager": "pnpm@10.32.1",
   "exports": {
     ".": {
       "import": "./dist/index.js",

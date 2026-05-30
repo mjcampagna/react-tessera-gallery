@@ -446,3 +446,63 @@ describe('minColumns', () => {
     expect(rowsPanoMiddle[1].items[0].aspectRatio).toBe(20)
   })
 })
+
+// ─── Adversarial inputs ──────────────────────────────────────────────────────
+
+describe('adversarial inputs', () => {
+  function expectFiniteRows(rows: ReturnType<typeof computeTesseraLayout>) {
+    for (const row of rows) {
+      expect(Number.isFinite(row.height)).toBe(true)
+      expect(row.height).toBeGreaterThanOrEqual(0)
+      for (const item of row.items) {
+        expect(Number.isFinite(item.aspectRatio)).toBe(true)
+        expect(Number.isFinite(item.width)).toBe(true)
+        expect(Number.isFinite(item.height)).toBe(true)
+        expect(item.width).toBeGreaterThanOrEqual(0)
+        expect(item.height).toBeGreaterThanOrEqual(0)
+      }
+    }
+  }
+
+  it('returns [] for non-finite or non-positive row heights', () => {
+    expect(computeTesseraLayout(items([1]), 100, { rowHeight: 0 })).toEqual([])
+    expect(computeTesseraLayout(items([1]), 100, { rowHeight: -1 })).toEqual([])
+    expect(computeTesseraLayout(items([1]), 100, { rowHeight: Number.NaN })).toEqual([])
+    expect(computeTesseraLayout(items([1]), 100, { rowHeight: Number.POSITIVE_INFINITY })).toEqual([])
+  })
+
+  it('falls back to square placeholders for invalid aspect ratios', () => {
+    const rows = computeTesseraLayout(
+      items([0, -1, Number.NaN, Number.POSITIVE_INFINITY]),
+      400,
+      { rowHeight: 100, lastRow: 'justify' },
+    )
+
+    expect(rows.reduce((sum, row) => sum + row.items.length, 0)).toBe(4)
+    expect(rows.flatMap(row => row.items.map(item => item.aspectRatio))).toEqual([1, 1, 1, 1])
+    expectFiniteRows(rows)
+  })
+
+  it('keeps dimensions finite when gap exceeds the container width', () => {
+    const rows = computeTesseraLayout(
+      items([1, 1, 1]),
+      50,
+      { rowHeight: 100, gap: 100, minColumns: 2 },
+    )
+
+    expect(rows.reduce((sum, row) => sum + row.items.length, 0)).toBe(3)
+    expectFiniteRows(rows)
+  })
+
+  it('covers mixed ultra-wide and ultra-tall items without dropping any', () => {
+    const rows = computeTesseraLayout(
+      items([1000, 0.001, 1, 2, 0.5]),
+      320,
+      { rowHeight: 120, gap: 8, minColumns: 2 },
+    )
+
+    expect(rows.reduce((sum, row) => sum + row.items.length, 0)).toBe(5)
+    expect(rows[0].items[0].aspectRatio).toBe(1000)
+    expectFiniteRows(rows)
+  })
+})

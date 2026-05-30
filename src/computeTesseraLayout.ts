@@ -2,6 +2,18 @@ import type { LayoutOptions, LayoutRow } from './types'
 
 const BADNESS_POWER = 3
 
+function finitePositive(value: number, fallback: number): number {
+  return Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function finiteNonNegative(value: number, fallback = 0): number {
+  return Number.isFinite(value) && value >= 0 ? value : fallback
+}
+
+function finiteGreaterThan(value: number, min: number, fallback: number): number {
+  return Number.isFinite(value) && value > min ? value : fallback
+}
+
 export function computeTesseraLayout(
   items: { aspectRatio: number }[],
   containerWidth: number,
@@ -18,29 +30,51 @@ export function computeTesseraLayout(
     justifyThreshold = 0.9,
   } = options
 
-  const idealHeight =
+  if (items.length === 0 || !Number.isFinite(containerWidth) || containerWidth <= 0) return []
+
+  const rawIdealHeight =
     typeof rowHeightOption === 'function' ? rowHeightOption(containerWidth) : rowHeightOption
+  if (!Number.isFinite(rawIdealHeight) || rawIdealHeight <= 0) return []
 
-  const gap =
+  const idealHeight = rawIdealHeight
+  const rawGap =
     typeof gapOption === 'function' ? gapOption(containerWidth) : gapOption
+  const gap = finiteNonNegative(rawGap)
+  const safeItems = items.map(item => ({ aspectRatio: finitePositive(item.aspectRatio, 1) }))
+  const effectiveMaxNumRows =
+    Number.isFinite(maxNumRows)
+      ? Math.max(0, Math.floor(maxNumRows))
+      : Infinity
+  if (effectiveMaxNumRows === 0) return []
 
-  const n = items.length
-  if (n === 0 || containerWidth <= 0) return []
+  const safeMaxShrink = finitePositive(maxShrink, 0.75)
+  const safeMaxStretch = finiteGreaterThan(maxStretch, 1, 1.5)
+  const safeJustifyThreshold = finiteNonNegative(justifyThreshold, 0.9)
+  const safeMinColumns =
+    minColumns !== undefined && Number.isFinite(minColumns) && minColumns > 0
+      ? Math.max(1, Math.floor(minColumns))
+      : undefined
+
+  const n = safeItems.length
 
   // minColumns caps idealHeight so that rows of at least N items are viable.
   // This is a soft guarantee — actual item count per row depends on aspect ratios.
+  const minColumnsHeightCap =
+    safeMinColumns !== undefined
+      ? (containerWidth - gap * (safeMinColumns - 1)) / safeMinColumns
+      : undefined
   const effectiveIdealHeight =
-    minColumns !== undefined
-      ? Math.min(idealHeight, (containerWidth - gap * (minColumns - 1)) / minColumns)
+    minColumnsHeightCap !== undefined && minColumnsHeightCap > 0
+      ? Math.min(idealHeight, minColumnsHeightCap)
       : idealHeight
 
-  const minHeight = effectiveIdealHeight * maxShrink
+  const minHeight = effectiveIdealHeight * safeMaxShrink
 
   // Prefix sums for O(1) aspect ratio range queries
   const prefixAR = new Array<number>(n + 1)
   prefixAR[0] = 0
   for (let i = 0; i < n; i++) {
-    prefixAR[i + 1] = prefixAR[i] + items[i].aspectRatio
+    prefixAR[i + 1] = prefixAR[i] + safeItems[i].aspectRatio
   }
 
   // Height a row spanning items[start..end) would occupy at full container width
@@ -54,7 +88,7 @@ export function computeTesseraLayout(
   // maxStretch controls the steepness of the penalty above idealHeight but is not a hard limit.
   function badness(h: number): number {
     if (h >= effectiveIdealHeight) {
-      const range = effectiveIdealHeight * (maxStretch - 1)
+      const range = effectiveIdealHeight * (safeMaxStretch - 1)
       return range === 0 ? Infinity : (h - effectiveIdealHeight) ** BADNESS_POWER / range ** BADNESS_POWER
     }
     const range = effectiveIdealHeight - minHeight
@@ -125,7 +159,7 @@ export function computeTesseraLayout(
   let start = 0
   let prevRowHeight = effectiveIdealHeight
 
-  const effectiveBreaks = breaks.slice(0, maxNumRows)
+  const effectiveBreaks = breaks.slice(0, effectiveMaxNumRows)
 
   for (let r = 0; r < effectiveBreaks.length; r++) {
     const end = effectiveBreaks[r]
@@ -145,7 +179,7 @@ export function computeTesseraLayout(
       // Justify last row if option says so, or if fill ratio meets threshold
       const naturalWidth = totalAR * effectiveIdealHeight + gap * numGaps
       const fillRatio = naturalWidth / containerWidth
-      const shouldJustify = lastRow === 'justify' || fillRatio >= justifyThreshold
+      const shouldJustify = lastRow === 'justify' || fillRatio >= safeJustifyThreshold
 
       if (shouldJustify) {
         actualHeight = rowHeightFor(start, end)
@@ -160,7 +194,7 @@ export function computeTesseraLayout(
       justify = true
     }
 
-    rows.push(buildRow(items, start, end, actualHeight, justify, containerWidth, gap))
+    rows.push(buildRow(safeItems, start, end, actualHeight, justify, containerWidth, gap))
     prevRowHeight = actualHeight
     start = end
   }

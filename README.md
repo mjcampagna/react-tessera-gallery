@@ -18,7 +18,7 @@ React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic pr
 ## Installation
 
 ```bash
-npm install @slithy/react-tessera-gallery
+pnpm add @slithy/react-tessera-gallery
 ```
 
 **Peer dependencies:** `react@^17 || ^18 || ^19`
