@@ -146,29 +146,87 @@ rootMargin fires → fetch → data arrives → items enter layout → overscan 
 
 Everything from the fetch onward must complete before the user reaches the overscan boundary. That means `rootMargin` should lead by at least `overscan` distance plus expected network latency — in practice often 2–3× `overscan`. If `rootMargin` is smaller than `overscan`, the data may not be available when overscan tries to render it, causing a hard stop at the bottom of the current layout.
 
-**Performance and `React.memo`:** when `virtualize` is enabled, `renderItem` is called for every visible item on every scroll tick. If your item component is expensive to render, wrap it in `React.memo`. Note that the `layout` object (`{ width, height, loaded }`) is a new reference on every render — if your comparator checks object identity, use a custom comparator or destructure the values:
+---
+
+## Consumer performance guide
+
+For best results, give the gallery stable inputs. Derive `items` with `useMemo` so unrelated parent renders do not force the gallery to reprocess the collection:
 
 ```tsx
+const items = useMemo(
+  () =>
+    photos.map(photo => ({
+      key: photo.id,
+      src: photo.src,
+      alt: photo.alt,
+      aspectRatio: photo.width / photo.height,
+    })),
+  [photos],
+)
+
+<TesseraGallery items={items} rowHeight={200} virtualize renderItem={renderPhoto} />
+```
+
+Providing `aspectRatio` upfront is the biggest stability win. The gallery can discover aspect ratios from image `onLoad`, but known ratios let it compute the final layout on the first pass and avoid re-layout work as thumbnails load.
+
+Memoize responsive option callbacks and `renderItem` when they are created in a parent component:
+
+```tsx
+const rowHeight = useCallback((width: number) => (width < 700 ? 140 : 220), [])
+const gap = useCallback((width: number) => (width < 700 ? 2 : 6), [])
+
+<TesseraGallery items={items} rowHeight={rowHeight} gap={gap} virtualize renderItem={renderPhoto} />
+```
+
+When `virtualize` is enabled, only the rendered row window is materialized, but visible items still receive fresh layout values as the viewport changes. If item rendering is non-trivial, wrap the item component in `React.memo` and compare primitive layout props:
+
+```tsx
+type PhotoProps = {
+  item: PhotoItem
+  width: number
+  height: number
+  loaded: boolean
+  onLoad: React.ReactEventHandler<HTMLImageElement>
+}
+
 const Photo = React.memo(
-  ({ item, width, height, loaded }) => (
-    <img src={item.src} width={width} height={height} style={{ opacity: loaded ? 1 : 0 }} />
+  ({ item, width, height, loaded, onLoad }: PhotoProps) => (
+    <img
+      src={item.src}
+      alt={item.alt}
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+      onLoad={onLoad}
+      style={{ opacity: loaded ? 1 : 0 }}
+    />
   ),
   (prev, next) =>
+    prev.item === next.item &&
     prev.width === next.width &&
     prev.height === next.height &&
     prev.loaded === next.loaded &&
-    prev.item === next.item,
+    prev.onLoad === next.onLoad,
 )
 
-<TesseraGallery
-  items={photos}
-  rowHeight={200}
-  virtualize
-  renderItem={(item, layout, handlers) => (
-    <Photo key={item.key} item={item} {...layout} />
-  )}
-/>
+const renderPhoto = useCallback(
+  (item: PhotoItem, { width, height, loaded }, handlers) => (
+    <Photo
+      item={item}
+      width={width}
+      height={height}
+      loaded={loaded}
+      onLoad={handlers.onLoad}
+    />
+  ),
+  [],
+)
 ```
+
+For infinite scrolling, fetch before users reach the live frontier row. `overscan` only controls how much already-loaded content is rendered around the viewport; it does not fetch data. Use an IntersectionObserver `rootMargin` large enough to cover network latency, image metadata availability, and the gallery's overscan distance.
+
+If you consume `useTesseraGallery` directly, remember that `rows` means "render rows" when `virtualize` is enabled. Use `totalRows`, `row.rowIndex`, and item `itemIndex` / `colIndex` for ARIA metadata, scroll math, analytics, and any UI that needs full-gallery indices.
 
 ---
 
