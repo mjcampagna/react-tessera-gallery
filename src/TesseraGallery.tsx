@@ -14,34 +14,23 @@ type Props<T> = {
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...options }: Props<T>): ReactNode {
-  const { containerRef, rows, gap, onLoad, onError, virtualWindow, focusedIndex, handleItemFocus, handleItemKeyDown } = useTesseraGallery(items, options, scrollContainerRef)
+  const { containerRef, rows, totalRows, gap, onLoad, onError, virtualWindow, focusedIndex, handleItemFocus, handleItemKeyDown } = useTesseraGallery(items, options, scrollContainerRef)
   const { lastRow = 'left' } = options
 
   const navigable = options.navigable === true
   const padding = options.padding ?? 0
 
-  const firstIndex = virtualWindow?.firstIndex ?? 0
-  const lastIndex = virtualWindow?.lastIndex ?? rows.length - 1
-  const visibleRows = virtualWindow ? rows.slice(firstIndex, lastIndex + 1) : rows
-
-  // Track flat item index across all displayed rows, starting from the first visible row
-  let flatIdx = 0
-  for (let r = 0; r < firstIndex; r++) {
-    flatIdx += rows[r].items.length
-  }
-
   return (
     <div
       ref={containerRef}
       style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px`, padding: padding > 0 ? `${padding}px` : undefined }}
-      {...(navigable ? { role: 'grid', 'aria-rowcount': rows.length } : {})}
+      {...(navigable ? { role: 'grid', 'aria-rowcount': totalRows } : {})}
     >
       {virtualWindow && virtualWindow.topSpacerHeight > 0 && (
         <div style={{ height: virtualWindow.topSpacerHeight, contain: 'layout' }} />
       )}
-      {visibleRows.map((row, i) => {
-        const rowIndex = firstIndex + i
-        const isLastRow = rowIndex === rows.length - 1
+      {rows.map(row => {
+        const isLastRow = row.rowIndex === totalRows - 1
         const justifyContent =
           isLastRow && lastRow === 'center' ? 'center' :
           isLastRow && lastRow === 'right'  ? 'flex-end' :
@@ -49,19 +38,18 @@ export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...op
 
         return (
           <div
-            key={rowIndex}
+            key={row.rowIndex}
             style={{ display: 'flex', gap: `${gap}px`, justifyContent, contain: 'layout' }}
-            {...(navigable ? { role: 'row', 'aria-rowindex': rowIndex + 1 } : {})}
+            {...(navigable ? { role: 'row', 'aria-rowindex': row.rowIndex + 1 } : {})}
           >
-            {row.items.map(({ item, width, height, loaded }, colIdx) => {
-              const itemIndex = flatIdx++
+            {row.items.map(({ item, itemIndex, colIndex, width, height, loaded }) => {
               const focused = navigable && focusedIndex === itemIndex
               return (
                 <div
                   key={item.key}
                   {...(navigable ? {
                     role: 'gridcell',
-                    'aria-colindex': colIdx + 1,
+                    'aria-colindex': colIndex + 1,
                     tabIndex: focused ? 0 : -1,
                     'data-tessera-index': itemIndex,
                     onKeyDown: (e) => handleItemKeyDown(itemIndex, e),

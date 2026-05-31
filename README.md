@@ -9,7 +9,7 @@ React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic pr
 - **Incremental loading** — items without a known `aspectRatio` render immediately with a placeholder ratio and re-layout once `onLoad` fires with real dimensions; `loaded` reflects browser load state
 - **Responsive** — `rowHeight` and `gap` accept `(containerWidth: number) => number` callbacks, re-evaluated on every container resize
 - **Panorama handling** — ultra-wide items that can't share a row get their own full-width row, exempt from height constraints
-- **Virtualization** — opt-in `virtualize` prop renders only rows near the viewport via spacer divs; no overhead when disabled
+- **Virtualization** — opt-in `virtualize` prop materializes only rows near the viewport via spacer divs; no overhead when disabled
 - **Three-layer API** — use the full component, the hook, or the pure layout function depending on how much control you need
 - ESM only · zero runtime dependencies · `sideEffects: false`
 
@@ -95,7 +95,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 
 ## Virtualization
 
-Enable `virtualize` to keep the DOM small for large collections. Only rows within the viewport (plus `overscan`) are rendered; spacer divs above and below maintain the full scroll height.
+Enable `virtualize` to keep the DOM and render work small for large collections. Only rows within the viewport (plus `overscan`) are materialized; spacer divs above and below maintain the full scroll height.
 
 ```tsx
 <TesseraGallery
@@ -196,7 +196,7 @@ The hook underlying `<TesseraGallery>`. Use this directly for custom rendering o
 ```ts
 import { useTesseraGallery } from '@slithy/react-tessera-gallery'
 
-const { containerRef, rows, gap, onLoad, onError } = useTesseraGallery(items, options, scrollContainerRef)
+const { containerRef, rows, totalRows, gap, onLoad, onError } = useTesseraGallery(items, options, scrollContainerRef)
 ```
 
 **Returns:**
@@ -204,11 +204,14 @@ const { containerRef, rows, gap, onLoad, onError } = useTesseraGallery(items, op
 | Property | Type | Description |
 |---|---|---|
 | `containerRef` | `RefObject<HTMLDivElement \| null>` | Attach to your container element to observe its width |
-| `rows` | `ResolvedRow<T>[]` | Computed layout rows, each with `height` and `items` |
+| `rows` | `ResolvedRow<T>[]` | Render rows. When `virtualize` is enabled, this contains only the visible/overscanned rows. |
+| `totalRows` | `number` | Total number of rows in the full gallery, regardless of virtualization. Use this for ARIA row counts and full-gallery metadata. |
 | `gap` | `number` | Resolved gap value (useful when `gap` was passed as a callback) |
 | `onLoad` | `(key, naturalWidth, naturalHeight) => void` | Call when an image loads to resolve its aspect ratio and mark it loaded |
 | `onError` | `(key) => void` | Call when an image fails to load; writes a fallback aspect ratio so the layout can commit past it, and marks the item for removal when `skipErrors` is set |
 | `virtualWindow` | `{ firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight } \| null` | Set when `virtualize` is true; describes which rows are visible and the spacer heights needed to maintain full scroll height |
+
+`ResolvedRow<T>` includes `rowIndex`, `startIndex`, `height`, and `items`. Each item entry includes the original `item`, `itemIndex`, `colIndex`, `width`, `height`, and `loaded`.
 
 ---
 

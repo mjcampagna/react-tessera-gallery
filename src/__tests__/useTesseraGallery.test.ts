@@ -75,6 +75,7 @@ describe('rendering without pre-known aspect ratios', () => {
 
     expect(allKeys(result.current.rows)).toHaveLength(9)
     expect(allKeys(result.current.rows)).toEqual(KEYS)
+    expect(result.current.totalRows).toBe(3)
   })
 
   it('renders all items even when onLoad never fires (cached-image scenario)', () => {

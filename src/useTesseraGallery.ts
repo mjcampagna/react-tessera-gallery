@@ -10,11 +10,20 @@ type CommittedRow<T> = {
   items: Array<{ item: GalleryItem<T>; width: number; height: number }>
 }
 
-function toResolvedRow<T>(row: CommittedRow<T>, loadedSet: Set<string | number>): ResolvedRow<T> {
+function toResolvedRow<T>(
+  row: CommittedRow<T>,
+  loadedSet: Set<string | number>,
+  rowIndex: number,
+  startIndex: number,
+): ResolvedRow<T> {
   return {
+    rowIndex,
+    startIndex,
     height: row.height,
-    items: row.items.map(({ item, width, height }) => ({
+    items: row.items.map(({ item, width, height }, colIndex) => ({
       item,
+      itemIndex: startIndex + colIndex,
+      colIndex,
       width,
       height,
       loaded: loadedSet.has(item.key),
@@ -45,6 +54,7 @@ export function useTesseraGallery<T>(
 ): {
   containerRef: RefObject<HTMLDivElement | null>
   rows: ResolvedRow<T>[]
+  totalRows: number
   gap: number
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
   onError: (key: string | number) => void
@@ -71,6 +81,10 @@ export function useTesseraGallery<T>(
 
   // Stabilized rows output — only updated when content genuinely changes
   const prevRowsRef = useRef<ResolvedRow<T>[]>([])
+  const allRowsRef = useRef<CommittedRow<T>[]>([])
+  const rowTopsRef = useRef<number[]>([])
+  const rowStartsRef = useRef<number[]>([])
+  const totalItemsRef = useRef(0)
 
   const virtualRange = useVirtualWindow(containerRef, options.virtualize === true, scrollContainerRef)
 
@@ -280,24 +294,108 @@ export function useTesseraGallery<T>(
     }
   }
 
-  const rows: ResolvedRow<T>[] = committedRowsRef.current.map(row => toResolvedRow(row, loadedSet.current))
+  const allRows: CommittedRow<T>[] = [...committedRowsRef.current]
   const lastFrontierRow = frontierRows[frontierRows.length - 1]
   if (lastFrontierRow) {
-    rows.push(toResolvedRow(lastFrontierRow, loadedSet.current))
+    allRows.push(lastFrontierRow)
   }
 
-  // Stabilize the rows reference — only return a new array if something actually
-  // changed. This prevents consumers using React.memo from re-rendering when a
-  // parent re-renders for unrelated reasons but the gallery layout hasn't changed.
+  const rowTops: number[] = []
+  const rowStarts: number[] = []
+  let cumulativeTop = 0
+  let cumulativeItems = 0
+  for (const row of allRows) {
+    rowTops.push(cumulativeTop)
+    rowStarts.push(cumulativeItems)
+    cumulativeTop += row.height + resolvedGap
+    cumulativeItems += row.items.length
+  }
+  const totalRows = allRows.length
+  const totalHeight = totalRows > 0 ? cumulativeTop - resolvedGap : 0
+
+  allRowsRef.current = allRows
+  rowTopsRef.current = rowTops
+  rowStartsRef.current = rowStarts
+  totalItemsRef.current = cumulativeItems
+
+  // ─── Virtual window ────────────────────────────────────────────────────────
+
+  let virtualWindow: VirtualWindow | null = null
+
+  if (options.virtualize && virtualRange !== null && totalRows > 0) {
+    const overscan = options.overscan ?? resolvedRowHeight * 4
+    const visibleTop = virtualRange.top - overscan
+    const visibleBottom = virtualRange.bottom + overscan
+
+    const padding = options.padding ?? 0
+
+    let low = 0
+    let high = totalRows
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      const rowBottom = rowTops[mid] + padding + allRows[mid].height
+      if (rowBottom > visibleTop) {
+        high = mid
+      } else {
+        low = mid + 1
+      }
+    }
+    const firstIndex = Math.min(totalRows - 1, low)
+
+    low = 0
+    high = totalRows
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      const rowTop = rowTops[mid] + padding
+      if (rowTop < visibleBottom) {
+        low = mid + 1
+      } else {
+        high = mid
+      }
+    }
+    let lastIndex = Math.max(0, low - 1)
+    if (firstIndex > lastIndex) {
+      lastIndex = firstIndex
+    }
+
+    const topSpacerHeight = rowTops[firstIndex]
+    const bottomSpacerHeight = totalHeight - (rowTops[lastIndex] + allRows[lastIndex].height)
+
+    virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
+  }
+
+  const firstRenderRow = options.virtualize ? virtualWindow?.firstIndex : 0
+  const lastRenderRow = options.virtualize ? virtualWindow?.lastIndex : totalRows - 1
+  const rows: ResolvedRow<T>[] =
+    firstRenderRow === undefined ||
+    lastRenderRow === undefined ||
+    firstRenderRow > lastRenderRow
+      ? []
+      : allRows
+          .slice(firstRenderRow, lastRenderRow + 1)
+          .map((row, offset) => {
+            const rowIndex = firstRenderRow + offset
+            return toResolvedRow(row, loadedSet.current, rowIndex, rowStarts[rowIndex] ?? 0)
+          })
+
+  // Stabilize the render rows reference — only return a new array if something
+  // actually changed. This prevents consumers using React.memo from re-rendering
+  // when a parent re-renders for unrelated reasons but the visible gallery
+  // output hasn't changed.
   const isStable =
     rows.length === prevRowsRef.current.length &&
     rows.every((row, i) => {
       const prev = prevRowsRef.current[i]
       return (
-        row.height === prev?.height &&
-        row.items.length === prev?.items.length &&
+        prev !== undefined &&
+        row.rowIndex === prev.rowIndex &&
+        row.startIndex === prev.startIndex &&
+        row.height === prev.height &&
+        row.items.length === prev.items.length &&
         row.items.every(
           (item, j) =>
+            item.itemIndex === prev.items[j]?.itemIndex &&
+            item.colIndex === prev.items[j]?.colIndex &&
             item.width === prev.items[j]?.width &&
             item.height === prev.items[j]?.height &&
             item.loaded === prev.items[j]?.loaded &&
@@ -309,61 +407,14 @@ export function useTesseraGallery<T>(
     prevRowsRef.current = rows
   }
 
-  // ─── Virtual window ────────────────────────────────────────────────────────
-
-  let virtualWindow: VirtualWindow | null = null
-
-  if (options.virtualize && virtualRange !== null && prevRowsRef.current.length > 0) {
-    const stableRows = prevRowsRef.current
-    const overscan = options.overscan ?? resolvedRowHeight * 4
-    const visibleTop = virtualRange.top - overscan
-    const visibleBottom = virtualRange.bottom + overscan
-
-    // Compute cumulative row tops
-    const rowTops: number[] = []
-    let cumTop = 0
-    for (const row of stableRows) {
-      rowTops.push(cumTop)
-      cumTop += row.height + resolvedGap
-    }
-    const totalHeight = cumTop - resolvedGap
-
-    const padding = options.padding ?? 0
-
-    let firstIndex = stableRows.length
-    let lastIndex = -1
-    for (let i = 0; i < stableRows.length; i++) {
-      const rowTop = rowTops[i] + padding
-      const rowBottom = rowTop + stableRows[i].height
-      if (rowBottom > visibleTop && rowTop < visibleBottom) {
-        if (firstIndex === stableRows.length) firstIndex = i
-        lastIndex = i
-      }
-    }
-
-    // Fallback: show all rows if none are in range (e.g. before first scroll measurement)
-    if (firstIndex > lastIndex) {
-      firstIndex = 0
-      lastIndex = stableRows.length - 1
-    }
-
-    const topSpacerHeight = rowTops[firstIndex]
-    const bottomSpacerHeight = totalHeight - (rowTops[lastIndex] + stableRows[lastIndex].height)
-
-    virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
-  }
-
   // ─── Navigation ────────────────────────────────────────────────────────────
 
   const isControlled = options.focusedIndex !== undefined
 
   function scrollToRow(rowIndex: number): void {
     const padding = options.padding ?? 0
-    const stableRows = prevRowsRef.current
-    let rowTop = padding
-    for (let i = 0; i < rowIndex; i++) {
-      rowTop += stableRows[i].height + resolvedGap
-    }
+    const stableRows = allRowsRef.current
+    const rowTop = padding + (rowTopsRef.current[rowIndex] ?? 0)
     const rowH = stableRows[rowIndex]?.height ?? 0
     const rowBottom = rowTop + rowH
     const scrollEl = resolveScrollEl(scrollContainerRef)
@@ -387,22 +438,29 @@ export function useTesseraGallery<T>(
   }
 
   function findRowCol(flatIndex: number): { rowIndex: number; colIndex: number; rowStart: number; rowLen: number } {
-    const stableRows = prevRowsRef.current
-    let count = 0
-    for (let r = 0; r < stableRows.length; r++) {
-      const len = stableRows[r].items.length
-      if (flatIndex < count + len) {
-        return { rowIndex: r, colIndex: flatIndex - count, rowStart: count, rowLen: len }
+    const stableRows = allRowsRef.current
+    const rowStarts = rowStartsRef.current
+    let low = 0
+    let high = stableRows.length
+    while (low < high) {
+      const mid = Math.floor((low + high) / 2)
+      const start = rowStarts[mid] ?? 0
+      const end = start + (stableRows[mid]?.items.length ?? 0)
+      if (flatIndex < start) {
+        high = mid
+      } else if (flatIndex >= end) {
+        low = mid + 1
+      } else {
+        return { rowIndex: mid, colIndex: flatIndex - start, rowStart: start, rowLen: stableRows[mid].items.length }
       }
-      count += len
     }
     const lastLen = stableRows[stableRows.length - 1]?.items.length ?? 0
-    return { rowIndex: stableRows.length - 1, colIndex: lastLen - 1, rowStart: count - lastLen, rowLen: lastLen }
+    const lastStart = rowStarts[stableRows.length - 1] ?? 0
+    return { rowIndex: stableRows.length - 1, colIndex: lastLen - 1, rowStart: lastStart, rowLen: lastLen }
   }
 
   function navigateTo(newIndex: number): void {
-    const stableRows = prevRowsRef.current
-    const displayedCount = stableRows.reduce((sum, row) => sum + row.items.length, 0)
+    const displayedCount = totalItemsRef.current
     if (displayedCount === 0) return
     const clamped = Math.max(0, Math.min(newIndex, displayedCount - 1))
     if (!isControlled) setFocusedIndex(clamped)
@@ -417,8 +475,8 @@ export function useTesseraGallery<T>(
   }
 
   function handleItemKeyDown(itemIndex: number, e: React.KeyboardEvent): void {
-    const stableRows = prevRowsRef.current
-    const displayedCount = stableRows.reduce((sum, row) => sum + row.items.length, 0)
+    const stableRows = allRowsRef.current
+    const displayedCount = totalItemsRef.current
     const { rowIndex, colIndex, rowStart, rowLen } = findRowCol(itemIndex)
     const rowEnd = rowStart + rowLen - 1
     switch (e.key) {
@@ -483,5 +541,5 @@ export function useTesseraGallery<T>(
     }
   })
 
-  return { containerRef, rows: prevRowsRef.current, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex: effectiveFocusedIndex, handleItemFocus, handleItemKeyDown }
+  return { containerRef, rows: prevRowsRef.current, totalRows, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex: effectiveFocusedIndex, handleItemFocus, handleItemKeyDown }
 }

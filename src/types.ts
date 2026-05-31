@@ -36,8 +36,12 @@ export type GalleryItem<T> = T & {
 }
 
 export type ResolvedRow<T> = {
+  rowIndex: number
+  startIndex: number
   items: Array<{
     item: GalleryItem<T>
+    itemIndex: number
+    colIndex: number
     width: number
     height: number
     loaded: boolean
