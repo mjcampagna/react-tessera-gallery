@@ -419,20 +419,24 @@ export function useTesseraGallery<T>(
     const rowBottom = rowTop + rowH
     const scrollEl = resolveScrollEl(scrollContainerRef)
     if (scrollEl) {
-      if (rowTop < scrollEl.scrollTop) {
-        scrollEl.scrollTop = rowTop
-      } else if (rowBottom > scrollEl.scrollTop + scrollEl.clientHeight) {
-        scrollEl.scrollTop = rowBottom - scrollEl.clientHeight
+      const visibleTop = scrollEl.scrollTop + padding
+      const visibleBottom = scrollEl.scrollTop + scrollEl.clientHeight - padding
+      if (rowTop < visibleTop) {
+        scrollEl.scrollTop = rowTop - padding
+      } else if (rowBottom > visibleBottom) {
+        scrollEl.scrollTop = rowBottom - scrollEl.clientHeight + padding
       }
     } else {
       const containerEl = containerRef.current
       if (!containerEl) return
       const absTop = containerEl.getBoundingClientRect().top + window.scrollY + rowTop
       const absBottom = absTop + rowH
-      if (absTop < window.scrollY) {
-        window.scrollTo({ top: absTop })
-      } else if (absBottom > window.scrollY + window.innerHeight) {
-        window.scrollTo({ top: absBottom - window.innerHeight })
+      const visibleTop = window.scrollY + padding
+      const visibleBottom = window.scrollY + window.innerHeight - padding
+      if (absTop < visibleTop) {
+        window.scrollTo({ top: absTop - padding })
+      } else if (absBottom > visibleBottom) {
+        window.scrollTo({ top: absBottom - window.innerHeight + padding })
       }
     }
   }
@@ -467,7 +471,7 @@ export function useTesseraGallery<T>(
     options.onFocusedIndexChange?.(clamped)
     const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${clamped}"]`)
     if (target) {
-      target.focus()
+      target.focus({ preventScroll: true })
     } else {
       scrollToRow(findRowCol(clamped).rowIndex)
       pendingFocusRef.current = clamped
@@ -536,7 +540,7 @@ export function useTesseraGallery<T>(
     if (pendingFocusRef.current === null) return
     const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${pendingFocusRef.current}"]`)
     if (target) {
-      target.focus()
+      target.focus({ preventScroll: true })
       pendingFocusRef.current = null
     }
   })

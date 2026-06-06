@@ -1,4 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
+import type React from 'react'
 
 import { useTesseraGallery } from '../useTesseraGallery'
 import type { GalleryItem, LayoutOptions, ResolvedRow } from '../types'
@@ -347,6 +348,27 @@ describe('navigation', () => {
   it('returns handleItemKeyDown as a function', () => {
     const { result } = renderHook(() => useTesseraGallery([makeItem('0', 1)], OPTIONS))
     expect(typeof result.current.handleItemKeyDown).toBe('function')
+  })
+
+  it('scrolls offscreen rows into the padded viewport', () => {
+    const items = KEYS.map(k => makeItem(k, 1))
+    const scrollEl = document.createElement('div')
+    const { result } = renderHook(() =>
+      useTesseraGallery(items, { rowHeight: 100, gap: 4, padding: 4 }, scrollEl),
+    )
+    fireResize(WIDTH)
+    const firstRowHeight = result.current.rows[0]?.height ?? 0
+    Object.defineProperty(scrollEl, 'clientHeight', { configurable: true, value: firstRowHeight + 8 })
+
+    act(() => {
+      result.current.handleItemKeyDown(0, {
+        key: 'ArrowDown',
+        metaKey: false,
+        preventDefault: vi.fn(),
+      } as unknown as React.KeyboardEvent)
+    })
+
+    expect(scrollEl.scrollTop).toBeCloseTo(firstRowHeight + result.current.gap)
   })
 })
 
