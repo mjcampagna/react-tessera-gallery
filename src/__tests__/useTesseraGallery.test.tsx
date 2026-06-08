@@ -278,6 +278,41 @@ describe('skipErrors', () => {
   })
 })
 
+// ─── onRenderMetricsChange ────────────────────────────────────────────────────
+
+describe('onRenderMetricsChange', () => {
+  it('fires with correct metrics after resize', () => {
+    const onRenderMetricsChange = vi.fn()
+    const items = [
+      knownItem('a', 1), knownItem('b', 1), knownItem('c', 1),
+      knownItem('d', 1), knownItem('e', 1),
+    ]
+    const { result } = renderHook(() =>
+      useTesseraGallery(items, { rowHeight: 100, onRenderMetricsChange }),
+    )
+    act(() => fireResize(200))
+    const call = onRenderMetricsChange.mock.calls.at(-1)?.[0]
+    expect(call.virtualized).toBe(false)
+    expect(call.totalItemCount).toBe(5)
+    expect(call.mountedItemCount).toBe(call.totalItemCount)
+    expect(call.mountedRowCount).toBe(call.totalRowCount)
+    expect(call.firstMountedRowIndex).toBe(0)
+    expect(call.lastMountedRowIndex).toBe(call.totalRowCount - 1)
+  })
+
+  it('does not fire again when rows are stable', () => {
+    const onRenderMetricsChange = vi.fn()
+    const items = [knownItem('a', 1)]
+    const { rerender } = renderHook(() =>
+      useTesseraGallery(items, { rowHeight: 100, onRenderMetricsChange }),
+    )
+    act(() => fireResize(100))
+    const countAfterResize = onRenderMetricsChange.mock.calls.length
+    rerender()
+    expect(onRenderMetricsChange.mock.calls.length).toBe(countAfterResize)
+  })
+})
+
 // ─── Row structure ────────────────────────────────────────────────────────────
 
 describe('row structure', () => {

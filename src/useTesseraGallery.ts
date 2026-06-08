@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, type RefObject } from 'react'
 import type React from 'react'
 
 import { computeTesseraLayout } from './computeTesseraLayout'
 import { useVirtualWindow, resolveScrollEl } from './useVirtualWindow'
-import type { GalleryItem, LayoutOptions, ResolvedRow, ScrollContainerRef } from './types'
+import type { GalleryItem, LayoutOptions, ResolvedRow, ScrollContainerRef, TesseraRenderMetrics } from './types'
 
 type CommittedRow<T> = {
   height: number
@@ -36,6 +36,23 @@ type VirtualWindow = {
   lastIndex: number
   topSpacerHeight: number
   bottomSpacerHeight: number
+}
+
+function buildRenderMetrics<T>(
+  rows: ResolvedRow<T>[],
+  totalItemCount: number,
+  totalRowCount: number,
+  virtualized: boolean,
+): TesseraRenderMetrics {
+  return {
+    virtualized,
+    mountedItemCount: rows.reduce((sum, row) => sum + row.items.length, 0),
+    mountedRowCount: rows.length,
+    totalItemCount,
+    totalRowCount,
+    firstMountedRowIndex: rows[0]?.rowIndex ?? null,
+    lastMountedRowIndex: rows.at(-1)?.rowIndex ?? null,
+  }
 }
 
 function finitePositive(value: number, fallback: number): number {
@@ -406,6 +423,17 @@ export function useTesseraGallery<T>(
   if (!isStable) {
     prevRowsRef.current = rows
   }
+
+  const stableRows = prevRowsRef.current
+
+  const renderMetrics = useMemo(
+    () => buildRenderMetrics(stableRows, resolvedItems.length, totalRows, options.virtualize === true),
+    [stableRows, resolvedItems.length, totalRows, options.virtualize],
+  )
+
+  useEffect(() => {
+    options.onRenderMetricsChange?.(renderMetrics)
+  }, [options.onRenderMetricsChange, renderMetrics])
 
   // ─── Navigation ────────────────────────────────────────────────────────────
 

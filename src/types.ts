@@ -2,6 +2,16 @@ import type { RefObject } from 'react'
 
 export type ScrollContainerRef = RefObject<HTMLElement | null> | HTMLElement | null
 
+export type TesseraRenderMetrics = {
+  virtualized: boolean
+  mountedItemCount: number
+  mountedRowCount: number
+  totalItemCount: number
+  totalRowCount: number
+  firstMountedRowIndex: number | null
+  lastMountedRowIndex: number | null
+}
+
 export type LayoutOptions = {
   rowHeight: number | ((containerWidth: number) => number)
   gap?: number | ((containerWidth: number) => number)
@@ -19,6 +29,8 @@ export type LayoutOptions = {
   focusedIndex?: number
   onFocusedIndexChange?: (index: number) => void
   onActivate?: (index: number, shiftKey: boolean) => void
+  /** Should be stable (e.g. `useCallback`) — called on every render where metrics change. */
+  onRenderMetricsChange?: (metrics: TesseraRenderMetrics) => void
 }
 
 export type LayoutRow = {

@@ -10,6 +10,7 @@ React photo gallery with optimal justified layout. Uses a Knuth-Plass dynamic pr
 - **Responsive** — `rowHeight` and `gap` accept `(containerWidth: number) => number` callbacks, re-evaluated on every container resize
 - **Panorama handling** — ultra-wide items that can't share a row get their own full-width row, exempt from height constraints
 - **Virtualization** — opt-in `virtualize` prop materializes only rows near the viewport via spacer divs; no overhead when disabled
+- **Render metrics** — opt-in `onRenderMetricsChange` callback reports mounted vs. total row counts on each render cycle
 - **Three-layer API** — use the full component, the hook, or the pure layout function depending on how much control you need
 - ESM only · zero runtime dependencies · `sideEffects: false`
 
@@ -79,6 +80,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
 | `skipErrors` | `boolean` | `false` | When true, items whose images fire `onError` are removed from the layout entirely rather than rendered as placeholders. |
 | `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. |
+| `onRenderMetricsChange` | `(metrics: TesseraRenderMetrics) => void` | — | Fired whenever the rendered row window changes. Should be stable (e.g. `useCallback`). See `TesseraRenderMetrics`. |
 
 **`renderItem` arguments:**
 
@@ -244,6 +246,38 @@ type GalleryItem<T> = T & {
 Items with a known `aspectRatio` are laid out immediately. Items without one render immediately using a placeholder aspect ratio and re-layout once `handlers.onLoad` fires with real dimensions derived from `naturalWidth / naturalHeight`.
 
 Providing `aspectRatio` upfront is recommended when possible — it produces a stable layout from the first render and avoids the re-layout pass when images load.
+
+---
+
+## `TesseraRenderMetrics`
+
+Passed to `onRenderMetricsChange` whenever the rendered row window changes.
+
+```ts
+type TesseraRenderMetrics = {
+  virtualized: boolean
+  mountedItemCount: number
+  mountedRowCount: number
+  totalItemCount: number
+  totalRowCount: number
+  firstMountedRowIndex: number | null
+  lastMountedRowIndex: number | null
+}
+```
+
+| Field | Description |
+|---|---|
+| `virtualized` | Whether `virtualize` is enabled |
+| `mountedItemCount` | Number of items currently in the DOM |
+| `mountedRowCount` | Number of rows currently in the DOM |
+| `totalItemCount` | Total items across the full gallery. When `skipErrors` is enabled, errored items are excluded. Note: with append-only rendering, this reflects committed items and may grow as images load and aspect ratios resolve. |
+| `totalRowCount` | Total rows across the full gallery |
+| `firstMountedRowIndex` | Row index of the first mounted row (`null` if no rows) |
+| `lastMountedRowIndex` | Row index of the last mounted row (`null` if no rows) |
+
+When `virtualize` is disabled, `mountedItemCount === totalItemCount` and `mountedRowCount === totalRowCount`.
+
+`onRenderMetricsChange` should be stable — wrap it in `useCallback` to avoid spurious fires when the parent re-renders.
 
 ---
 
