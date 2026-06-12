@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.10.0 — 2026-06-12
+
+### Added
+
+- **PageUp / PageDown keyboard navigation.** Jumps forward or backward by the number of currently visible rows, preserving column position. Requires `navigable`.
+- **Container tabIndex fallback for virtualized-out focused row.** When virtualization scrolls the focused row off-screen, the container receives `tabIndex=0` so the gallery remains reachable via Tab. The first keypress scrolls the row back into view and transfers focus to the cell.
+
+### Fixed
+
+- **Virtualization spacers off by one gap.** Each spacer height was over-counted by one `gap`, inflating scroll height and causing a visible jump when the first row was clipped. Spacers now subtract one gap (clamped at 0).
+- **`onFocusedIndexChange` fired twice per keyboard navigation.** `navigateTo` called the callback directly, then `target.focus()` triggered a second call via `handleItemFocus`. The duplicate is now suppressed.
+- **`maxShrink ≥ 1` degenerates the layout.** Values outside the valid `(0, 1)` range are now ignored and fall back to the default `0.75`.
+- **Window-mode virtual range goes stale after layout shifts.** Content changing height above the gallery (expanding accordions, dynamic content) moved the gallery without firing a scroll event, leaving the virtual range stale. A `ResizeObserver` on `document.documentElement` now re-measures when document layout changes.
+
 ## 2026-06-11
 
 ### Fixed
