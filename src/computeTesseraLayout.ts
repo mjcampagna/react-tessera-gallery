@@ -47,7 +47,7 @@ export function computeTesseraLayout(
       : Infinity
   if (effectiveMaxNumRows === 0) return []
 
-  const safeMaxShrink = finitePositive(maxShrink, 0.75)
+  const safeMaxShrink = Number.isFinite(maxShrink) && maxShrink > 0 && maxShrink < 1 ? maxShrink : 0.75
   const safeMaxStretch = finiteGreaterThan(maxStretch, 1, 1.5)
   const safeJustifyThreshold = finiteNonNegative(justifyThreshold, 0.9)
   const safeMinColumns =

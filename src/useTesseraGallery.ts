@@ -105,6 +105,9 @@ export function useTesseraGallery<T>(
   const [containerWidth, setContainerWidth] = useState(0)
   const [focusedIndex, setFocusedIndex] = useState(0)
   const pendingFocusRef = useRef<number | null>(null)
+  // Set before calling target.focus() in navigateTo so the resulting onFocus
+  // event can tell it's programmatic and skip the duplicate callback.
+  const programmaticFocusRef = useRef(false)
 
   // Aspect ratio cache — populated from items with known aspectRatio and via onLoad
   const aspectRatioCache = useRef<Map<string | number, number>>(new Map())
@@ -430,8 +433,11 @@ export function useTesseraGallery<T>(
       lastIndex = firstIndex
     }
 
-    const topSpacerHeight = rowTops[firstIndex]
-    const bottomSpacerHeight = totalHeight - (rowTops[lastIndex] + allRows[lastIndex].height)
+    // Each spacer is a flex sibling, so the container's gap is already inserted
+    // between the spacer and the nearest rendered row. Subtract one gap from each
+    // spacer so the total height stays correct (clamped at 0 for edge rows).
+    const topSpacerHeight = Math.max(0, rowTops[firstIndex] - resolvedGap)
+    const bottomSpacerHeight = Math.max(0, totalHeight - (rowTops[lastIndex] + allRows[lastIndex].height) - resolvedGap)
 
     virtualWindow = { firstIndex, lastIndex, topSpacerHeight, bottomSpacerHeight }
   }
@@ -554,6 +560,7 @@ export function useTesseraGallery<T>(
     options.onFocusedIndexChange?.(clamped)
     const target = containerRef.current?.querySelector<HTMLElement>(`[data-tessera-index="${clamped}"]`)
     if (target) {
+      programmaticFocusRef.current = true
       target.focus({ preventScroll: true })
     } else {
       scrollToRow(findRowCol(clamped).rowIndex)
@@ -614,6 +621,11 @@ export function useTesseraGallery<T>(
   const effectiveFocusedIndex = isControlled ? options.focusedIndex! : focusedIndex
 
   function handleItemFocus(index: number): void {
+    if (programmaticFocusRef.current) {
+      programmaticFocusRef.current = false
+      if (!isControlled) setFocusedIndex(index)
+      return
+    }
     if (!isControlled) setFocusedIndex(index)
     options.onFocusedIndexChange?.(index)
   }

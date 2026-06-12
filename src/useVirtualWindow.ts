@@ -19,6 +19,12 @@ export function resolveScrollEl(ref: ScrollContainerRef | undefined): HTMLElemen
  * When `scrollContainerRef` is provided, the scroll listener is attached to
  * that element instead of `window`. Use this when the gallery lives inside a
  * scrollable div rather than the page itself.
+ *
+ * **Requirement:** `scrollContainerRef.current` must be populated when the
+ * gallery first mounts. The effect resolves the scroll target once at setup
+ * time; if `.current` is null then (e.g. a conditionally rendered ancestor),
+ * the listener permanently binds to `window` and scroll events on the
+ * container will not update the virtual range.
  */
 export function useVirtualWindow(
   containerRef: React.RefObject<HTMLElement | null>,

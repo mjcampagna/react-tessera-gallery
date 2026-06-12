@@ -381,6 +381,65 @@ describe('virtualization', () => {
     expect(spacers[0].style.height).toBe('300px')
     expect(spacers[1].style.height).toBe('200px')
   })
+
+  it('bottom spacer accounts for gap between last rendered row and spacer', () => {
+    // 10 items, rowHeight=100, gap=8, overscan=0, innerHeight=100 → only row 0 visible.
+    // rowTops: [0, 108, 216, ...]; totalHeight = 10*100 + 9*8 = 1072.
+    // Correct bottomSpacer = 1072 - 100 - 8 = 964 (flex gap occupies one of the 8px slots).
+    // Bug: without the fix, spacer would be 1072-100 = 972, inflating scroll height by 8.
+    Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        gap={8}
+        virtualize
+        overscan={0}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    const spacers = Array.from(outerDiv.children).filter(
+      el => el.children.length === 0,
+    ) as HTMLElement[]
+    expect(spacers).toHaveLength(1)
+    expect(spacers[0].style.height).toBe('964px')
+  })
+
+  it('top and bottom spacers both account for gap when scrolled past the first row', () => {
+    // 10 items, rowHeight=100, gap=8, overscan=0, innerHeight=100.
+    // Scroll by 108px (rect.top=-108) → firstIndex=1, lastIndex=1.
+    // rowTops[1]=108; totalHeight=1072.
+    // Correct topSpacer = 108-8 = 100; bottomSpacer = 1072-(108+100)-8 = 856.
+    // Check: 100 + 8 (flex gap) + 100 (row1) + 8 (flex gap) + 856 = 1072 ✓
+    Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        gap={8}
+        virtualize
+        overscan={0}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    outerDiv.getBoundingClientRect = vi.fn().mockReturnValue({ top: -108 })
+    act(() => window.dispatchEvent(new Event('scroll')))
+
+    const spacers = Array.from(outerDiv.children).filter(
+      el => el.children.length === 0,
+    ) as HTMLElement[]
+    expect(spacers).toHaveLength(2)
+    expect(spacers[0].style.height).toBe('100px')
+    expect(spacers[1].style.height).toBe('856px')
+  })
 })
 
 // ─── padding ─────────────────────────────────────────────────────────────────
@@ -751,6 +810,28 @@ describe('navigable — controlled focusedIndex', () => {
     )
     act(() => fireResize(200))
     act(() => { fireEvent.focus(container.querySelector('[data-tessera-index="1"]') as HTMLElement) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(1)
+  })
+
+  it('onFocusedIndexChange fires exactly once per keyboard navigation', () => {
+    // Regression: navigateTo called the callback directly, then target.focus()
+    // triggered handleItemFocus which called it again — two firings per keystroke.
+    const onFocusedIndexChange = vi.fn()
+    const { container } = render(
+      <TesseraGallery
+        items={[photo('a', 1), photo('b', 1)]}
+        rowHeight={100}
+        navigable
+        focusedIndex={0}
+        onFocusedIndexChange={onFocusedIndexChange}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(200))
+    act(() => { fireEvent.keyDown(container.querySelector('[data-tessera-index="0"]') as HTMLElement, { key: 'ArrowRight' }) })
+    expect(onFocusedIndexChange).toHaveBeenCalledTimes(1)
     expect(onFocusedIndexChange).toHaveBeenCalledWith(1)
   })
 })

@@ -303,6 +303,20 @@ describe('maxShrink / maxStretch', () => {
     expect(totalItems).toBe(4)
   })
 
+  it('clamps maxShrink >= 1 to the default (0.75)', () => {
+    // maxShrink=1 would make minHeight=idealHeight, causing almost every candidate
+    // row to fail the height check and fall into the pano path — degenerate layout.
+    // Values >= 1 (and <= 0) should fall back to 0.75, not be accepted.
+    const rowsDefault = computeTesseraLayout(items([1, 1, 1]), 300, { rowHeight: 100 })
+    const rowsAtOne  = computeTesseraLayout(items([1, 1, 1]), 300, { rowHeight: 100, maxShrink: 1 })
+    const rowsAbove  = computeTesseraLayout(items([1, 1, 1]), 300, { rowHeight: 100, maxShrink: 1.2 })
+    const rowsAtZero = computeTesseraLayout(items([1, 1, 1]), 300, { rowHeight: 100, maxShrink: 0 })
+
+    expect(rowsAtOne.map(r => r.items.length)).toEqual(rowsDefault.map(r => r.items.length))
+    expect(rowsAbove.map(r => r.items.length)).toEqual(rowsDefault.map(r => r.items.length))
+    expect(rowsAtZero.map(r => r.items.length)).toEqual(rowsDefault.map(r => r.items.length))
+  })
+
   it('larger maxStretch allows wider rows', () => {
     // 1 item ar=1, container=200, rowHeight=100
     // h = 200 — default maxStretch=1.5 → 200>150, not in DP bounds → fallback last row
