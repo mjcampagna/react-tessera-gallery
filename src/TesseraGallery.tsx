@@ -1,3 +1,4 @@
+import type React from 'react'
 import type { ReactEventHandler, ReactNode } from 'react'
 
 import { useTesseraGallery } from './useTesseraGallery'
@@ -20,11 +21,30 @@ export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...op
   const navigable = options.navigable === true
   const padding = options.padding ?? 0
 
+  // Roving tabindex: the focused cell normally carries tabIndex=0. When the
+  // focused row is scrolled off-screen by virtualization, no cell has tabIndex=0
+  // and Tab skips the gallery. Fall back to tabIndex=0 on the container so the
+  // gallery stays reachable; keyboard navigation resumes from focusedIndex.
+  const firstVisible = rows[0]
+  const lastVisible = rows.at(-1)
+  const focusedRowMounted =
+    !navigable ||
+    (firstVisible !== undefined &&
+     lastVisible !== undefined &&
+     focusedIndex >= firstVisible.startIndex &&
+     focusedIndex < lastVisible.startIndex + lastVisible.items.length)
+
   return (
     <div
       ref={containerRef}
       style={{ display: 'flex', flexDirection: 'column', gap: `${gap}px`, padding: padding > 0 ? `${padding}px` : undefined }}
       {...(navigable ? { role: 'grid', 'aria-rowcount': totalRows } : {})}
+      {...(navigable && !focusedRowMounted ? {
+        tabIndex: 0,
+        onKeyDown: (e: React.KeyboardEvent<HTMLDivElement>) => {
+          if (e.target === e.currentTarget) handleItemKeyDown(focusedIndex, e)
+        },
+      } : {})}
     >
       {virtualWindow && virtualWindow.topSpacerHeight > 0 && (
         <div style={{ height: virtualWindow.topSpacerHeight, contain: 'layout' }} />

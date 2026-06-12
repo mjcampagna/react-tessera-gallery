@@ -41,6 +41,10 @@ function photo(key: string, aspectRatio: number): Photo {
   return { key, src: `/${key}.jpg`, aspectRatio }
 }
 
+function makeItems(count: number): Photo[] {
+  return Array.from({ length: count }, (_, i) => photo(`${i}`, 1))
+}
+
 // ─── Rendering ────────────────────────────────────────────────────────────────
 
 describe('rendering', () => {
@@ -257,10 +261,6 @@ describe('virtualization', () => {
   beforeEach(() => {
     Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
   })
-
-  function makeItems(count: number) {
-    return Array.from({ length: count }, (_, i) => photo(`${i}`, 1))
-  }
 
   it('uses rowHeight*4 as the default overscan', () => {
     // overscan = 100*4 = 400, visibleBottom = 100+400 = 500 → rows 0–4 → 5 items
@@ -723,6 +723,166 @@ describe('keyboard navigation', () => {
     act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight', metaKey: true }) })
     expect(focusedByKey['a']).toBe(true)
     expect(focusedByKey['b']).toBe(false)
+  })
+
+  it('PageDown moves forward by the visible row count, preserving column', () => {
+    // 8 square items, 200px container → 2 per row → 4 rows: [a,b][c,d][e,f][g,h]
+    // window.innerHeight=200 → 2 rows visible → pageSize=2
+    // From b (row 0, col 1): PageDown → row 2, col 1 → f (index 5)
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+    const items8 = ['a','b','c','d','e','f','g','h'].map(k => photo(k, 1))
+    const focusedByKey: Record<string, boolean> = {}
+    const { container } = render(
+      <TesseraGallery
+        items={items8}
+        rowHeight={100}
+        navigable
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowRight' }) }) // focus b (index 1)
+    act(() => { fireEvent.keyDown(cell(container, 1), { key: 'PageDown' }) })
+    expect(focusedByKey['f']).toBe(true)
+  })
+
+  it('PageUp moves back by the visible row count, preserving column', () => {
+    // Same layout as above. From f (row 2, col 1): PageUp → row 0, col 1 → b (index 1)
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+    const items8 = ['a','b','c','d','e','f','g','h'].map(k => photo(k, 1))
+    const focusedByKey: Record<string, boolean> = {}
+    const { container } = render(
+      <TesseraGallery
+        items={items8}
+        rowHeight={100}
+        navigable
+        renderItem={(item, layout) => {
+          focusedByKey[String(item.key)] = layout.focused
+          return <img src={item.src} alt="" />
+        }}
+      />,
+    )
+    act(() => fireResize(200))
+    // Navigate to f (index 5)
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'End', ctrlKey: true }) })
+    act(() => { fireEvent.keyDown(cell(container, 7), { key: 'ArrowLeft' }) })
+    act(() => { fireEvent.keyDown(cell(container, 6), { key: 'ArrowLeft' }) })
+    act(() => { fireEvent.keyDown(cell(container, 5), { key: 'PageUp' }) })
+    expect(focusedByKey['b']).toBe(true)
+  })
+
+  it('PageDown clamps to the last row', () => {
+    // 4 items → 2 rows. From row 1: PageDown should stay at last row.
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'ArrowDown' }) }) // focus c (row 1)
+    act(() => { fireEvent.keyDown(cell(container, 2), { key: 'PageDown' }) })
+    expect(focusedByKey['c']).toBe(true) // stays on last row
+  })
+
+  it('PageUp clamps to the first row', () => {
+    Object.defineProperty(window, 'innerHeight', { value: 200, configurable: true })
+    const { container, focusedByKey } = setup()
+    act(() => { fireEvent.keyDown(cell(container, 0), { key: 'PageUp' }) })
+    expect(focusedByKey['a']).toBe(true) // stays on first row
+  })
+})
+
+// ─── roving tabindex fallback ─────────────────────────────────────────────────
+
+describe('navigable — roving tabindex container fallback', () => {
+  // When virtualization scrolls the focused row off-screen, no cell has
+  // tabIndex=0 and Tab would skip the gallery. The container gets tabIndex=0
+  // as a fallback so the gallery stays reachable via keyboard.
+
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerHeight', { value: 100, configurable: true })
+  })
+
+  it('container gets tabIndex=0 when focused row is virtualized off screen', () => {
+    // 10 rows of 1 item each; innerHeight=100 → only row 0 visible.
+    // focusedIndex=5 → row 5 is off-screen → container should be the Tab target.
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        navigable
+        virtualize
+        overscan={0}
+        focusedIndex={5}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    expect(outerDiv.tabIndex).toBe(0)
+  })
+
+  it('no cell has tabIndex=0 when focused row is off-screen', () => {
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        navigable
+        virtualize
+        overscan={0}
+        focusedIndex={5}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const cells = container.querySelectorAll('[role="gridcell"]') as NodeListOf<HTMLElement>
+    expect(Array.from(cells).every(c => c.tabIndex === -1)).toBe(true)
+  })
+
+  it('container does not get tabIndex when focused row is visible', () => {
+    // focusedIndex=0 → row 0 is visible → cell should own tabIndex=0, not the container
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        navigable
+        virtualize
+        overscan={0}
+        focusedIndex={0}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    expect(outerDiv.tabIndex).not.toBe(0)
+  })
+
+  it('keyboard navigation from the container works when focused row is off-screen', () => {
+    // Press ArrowDown on the container: focused index should advance by 1 row.
+    const onFocusedIndexChange = vi.fn()
+    const { container } = render(
+      <TesseraGallery
+        items={makeItems(10)}
+        rowHeight={100}
+        navigable
+        virtualize
+        overscan={0}
+        focusedIndex={5}
+        onFocusedIndexChange={onFocusedIndexChange}
+        renderItem={(item, { width, height }) => (
+          <img key={item.key} src={item.src} width={width} height={height} alt="" />
+        )}
+      />,
+    )
+    act(() => fireResize(100))
+    const outerDiv = container.firstChild as HTMLElement
+    act(() => { fireEvent.keyDown(outerDiv, { key: 'ArrowDown' }) })
+    expect(onFocusedIndexChange).toHaveBeenCalledWith(6)
   })
 })
 

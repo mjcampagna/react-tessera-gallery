@@ -610,6 +610,34 @@ export function useTesseraGallery<T>(
         e.preventDefault()
         navigateTo(e.ctrlKey ? displayedCount - 1 : rowEnd)
         break
+      case 'PageDown': {
+        e.preventDefault()
+        if (rowIndex + 1 >= stableRows.length) break
+        const pageRowsDown = virtualWindow !== null
+          ? Math.max(1, virtualWindow.lastIndex - virtualWindow.firstIndex + 1)
+          : Math.max(1, Math.floor(
+              (resolveScrollEl(scrollContainerRef)?.clientHeight ?? window.innerHeight) /
+              Math.max(1, resolvedRowHeight + resolvedGap),
+            ))
+        const targetRowDown = Math.min(stableRows.length - 1, rowIndex + pageRowsDown)
+        const targetLenDown = stableRows[targetRowDown].items.length
+        navigateTo((rowStartsRef.current[targetRowDown] ?? 0) + Math.min(colIndex, targetLenDown - 1))
+        break
+      }
+      case 'PageUp': {
+        e.preventDefault()
+        if (rowIndex === 0) break
+        const pageRowsUp = virtualWindow !== null
+          ? Math.max(1, virtualWindow.lastIndex - virtualWindow.firstIndex + 1)
+          : Math.max(1, Math.floor(
+              (resolveScrollEl(scrollContainerRef)?.clientHeight ?? window.innerHeight) /
+              Math.max(1, resolvedRowHeight + resolvedGap),
+            ))
+        const targetRowUp = Math.max(0, rowIndex - pageRowsUp)
+        const targetLenUp = stableRows[targetRowUp].items.length
+        navigateTo((rowStartsRef.current[targetRowUp] ?? 0) + Math.min(colIndex, targetLenUp - 1))
+        break
+      }
       case ' ':
       case 'Enter':
         e.preventDefault()
