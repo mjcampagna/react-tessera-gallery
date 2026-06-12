@@ -88,16 +88,15 @@ Land the independent items whenever convenient (each is a small, self-verifying 
 - **Cluster fixed** (#1, #2, #4 plus both ride-alongs). Committed rows now store geometry + keys only and resolve live items by index at render time; a key-mismatch guard resets the layout on prepends/reorders; the frontier layout receives `maxNumRows` minus already-committed rows; `optionsKey` includes `minColumns` and `maxNumRows`; caches are pruned (with slack) when they outgrow the item set; render-purity invariants documented in the hook. Nine regression tests added in `useTesseraGallery.test.ts`. All 157 tests pass; lint and build clean.
 - **#6 docs drift fixed.** `overscan` default corrected in README and CLAUDE.md; CHANGELOG entry added; item identity/ordering contract documented in README and CLAUDE.md.
 
-**Remaining — assigned to Sonnet** (see assignee column above for per-task prompts and caveats):
+**Done — 2026-06-12 (Sonnet):**
 
-- Ready to delegate as-is: #3 spacer off-by-gap, #5 double `onFocusedIndexChange`, `maxShrink` clamp, late-populating `scrollContainerRef`.
-- Needs an approach decision first: window-mode stale range, roving-tabindex hardening (+ PageUp/PageDown).
-
-**Sonnet backlog — smaller observations (low priority, batch into one pass):**
-
-- Comment on the `dp[n]` fallback in `computeTesseraLayout.ts` noting it's an unreachable safety net.
-- JSDoc default annotations on `overscan` (and friends) in `types.ts`.
-- Row keying by `startIndex`/first-item key instead of `rowIndex` to preserve DOM across provisional rollbacks.
-- Integer widths for non-justified last rows (consistency with justified rows).
+- **#3 spacer off-by-gap.** Both spacer heights subtract one `resolvedGap` (clamped at 0). Two new tests with `gap=8`.
+- **#5 double `onFocusedIndexChange`.** `programmaticFocusRef` suppresses the duplicate callback from `target.focus()`. New test verifies exactly one firing per keystroke.
+- **`maxShrink` clamp.** Values ≥ 1 or ≤ 0 fall back to 0.75. New pure-function test.
+- **Late-populating `scrollContainerRef`.** Documented requirement in JSDoc.
+- **Window-mode stale range.** `ResizeObserver` on `document.documentElement` detects layout shifts above the gallery. New test fires the observer directly.
+- **Roving-tabindex hardening + PageUp/PageDown.** Container gets `tabIndex=0` when the focused row is virtualized off-screen; keydown guard prevents double-handling. PageUp/PageDown jump by visible-row count, preserving column. Eight new tests.
+- **Backlog polish.** `dp[n]` fallback comment; JSDoc `@default` annotations in `types.ts`; row keyed by `startIndex`; `Math.round` on non-justified last-row widths.
+- **Docs.** README: keyboard navigation section, navigable/focusedIndex/onFocusedIndexChange/onActivate/layout.focused props, maxShrink constraint, scrollContainerRef mount-time note. CLAUDE.md: keyboard navigation and scrollContainerRef requirement.
 
 **Not planned (accepted behavior):** widow rows snapping to `effectiveIdealHeight` in a later frontier batch (inherent to append-only); virtualization × provisional aspect-ratio jumps (mitigated by documented `aspectRatio`-upfront recommendation).

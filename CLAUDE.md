@@ -46,7 +46,11 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 **Virtualization:** Opt-in via `virtualize` prop. Implemented via `useVirtualWindow` ([src/useVirtualWindow.ts](src/useVirtualWindow.ts)) — attaches a passive scroll listener debounced with `requestAnimationFrame`, returns the visible pixel range in container-local coordinates. `useTesseraGallery` computes cumulative row offsets and derives `virtualWindow` (first/last visible row indices + spacer heights). `TesseraGallery` renders only the visible slice of rows with spacer divs above and below. No effect when disabled.
 
-`scrollContainerRef` (optional third arg to `useTesseraGallery`, prop on `TesseraGallery`) — when the gallery is inside a scrollable div, pass a ref to that element. The scroll listener attaches to it instead of `window`, and `clientHeight` is used instead of `window.innerHeight`. Without this, scroll events never reach `window` and the visible range never updates.
+`scrollContainerRef` (optional third arg to `useTesseraGallery`, prop on `TesseraGallery`) — when the gallery is inside a scrollable div, pass a ref to that element. The scroll listener attaches to it instead of `window`, and `clientHeight` is used instead of `window.innerHeight`. Without this, scroll events never reach `window` and the visible range never updates. **Requirement:** `scrollContainerRef.current` must be populated when the gallery first mounts; the scroll target is resolved once at effect setup time.
+
+In window-scroll mode, a `ResizeObserver` on `document.documentElement` detects layout shifts above the gallery (content height changes) so the virtual range stays accurate even without a scroll event.
+
+**Keyboard navigation:** Opt-in via `navigable` prop. The gallery renders as a `role="grid"` ARIA widget with a roving tabindex — one cell holds `tabIndex=0` at a time. Arrow keys, Home/End, PageUp/PageDown, Space/Enter are handled in `handleItemKeyDown`. Controlled mode via `focusedIndex` + `onFocusedIndexChange`. When virtualization scrolls the focused row off-screen, the container itself receives `tabIndex=0` as a fallback so Tab still lands in the gallery; the first keypress scrolls the row back into view.
 
 ### Types
 

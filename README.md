@@ -73,13 +73,17 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `lastRow` | `'left' \| 'center' \| 'right' \| 'justify' \| 'hide'` | `'left'` | Alignment of the last (partial) row |
 | `minColumns` | `number` | — | Soft minimum items per row — caps `rowHeight` so rows of at least N items are viable. Ultra-wide panos that can't share a row are exempt and always get their own full-width row. |
 | `maxNumRows` | `number` | `Infinity` | Maximum number of rows to render; overflow items are dropped |
-| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height |
+| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height. Must be strictly between 0 and 1 — values outside that range are ignored and the default is used. |
 | `maxStretch` | `number` | `1.5` | Controls how steeply the badness penalty rises above `rowHeight`; not a hard ceiling — rows may exceed this height if no better placement exists |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
 | `overscan` | `number` | `rowHeight * 4` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
 | `skipErrors` | `boolean` | `false` | When true, items whose images fire `onError` are removed from the layout entirely rather than rendered as placeholders. |
-| `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. |
+| `navigable` | `boolean` | `false` | Enable keyboard navigation. Adds ARIA grid semantics and roving tabindex. See [Keyboard navigation](#keyboard-navigation). |
+| `focusedIndex` | `number` | — | Controlled focused item index. When provided, the component does not manage focus state internally — use `onFocusedIndexChange` to update it. |
+| `onFocusedIndexChange` | `(index: number) => void` | — | Called when focus moves (keyboard navigation or direct focus). In controlled mode, update `focusedIndex` here. |
+| `onActivate` | `(index: number, shiftKey: boolean) => void` | — | Called when the focused item is activated with Space or Enter. |
+| `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. The element must be populated when the gallery first mounts — if it is conditionally rendered, ensure the gallery mounts only after the scroll container is available. |
 | `onRenderMetricsChange` | `(metrics: TesseraRenderMetrics) => void` | — | Fired whenever the rendered row window changes. Should be stable (e.g. `useCallback`). See `TesseraRenderMetrics`. |
 
 **`renderItem` arguments:**
@@ -90,6 +94,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `layout.width` | `number` | Computed pixel width for this item |
 | `layout.height` | `number` | Computed pixel height for this item |
 | `layout.loaded` | `boolean` | Whether the browser has confirmed this image loaded via `handlers.onLoad` |
+| `layout.focused` | `boolean` | Whether this item currently holds the roving tabindex focus. Only meaningful when `navigable` is set. |
 | `handlers.onLoad` | `ReactEventHandler<HTMLImageElement>` | Pass to `<img onLoad={...}>` to track load state and resolve aspect ratio |
 | `handlers.onError` | `ReactEventHandler<HTMLImageElement>` | Pass to `<img onError={...}>` to handle broken images — marks the item unloaded and (when `skipErrors` is set) removes it from layout |
 
@@ -147,6 +152,46 @@ rootMargin fires → fetch → data arrives → items enter layout → overscan 
 ```
 
 Everything from the fetch onward must complete before the user reaches the overscan boundary. That means `rootMargin` should lead by at least `overscan` distance plus expected network latency — in practice often 2–3× `overscan`. If `rootMargin` is smaller than `overscan`, the data may not be available when overscan tries to render it, causing a hard stop at the bottom of the current layout.
+
+---
+
+## Keyboard navigation
+
+Enable with `navigable`. The gallery becomes a `role="grid"` ARIA widget with roving tabindex — a single cell holds `tabIndex=0` at a time and Tab moves focus in and out of the gallery as a unit.
+
+```tsx
+<TesseraGallery
+  items={photos}
+  rowHeight={200}
+  navigable
+  onActivate={(index, shiftKey) => openLightbox(index)}
+  renderItem={(item, { width, height, focused }) => (
+    <img
+      src={item.src}
+      width={width}
+      height={height}
+      style={{ outline: focused ? '2px solid blue' : 'none' }}
+    />
+  )}
+/>
+```
+
+**Keys:**
+
+| Key | Action |
+|---|---|
+| ArrowRight / ArrowLeft | Move one item right / left |
+| ArrowDown / ArrowUp | Move to the same column in the next / previous row |
+| PageDown / PageUp | Jump forward / backward by the number of currently visible rows, preserving column |
+| Home | First item in the current row |
+| End | Last item in the current row |
+| Ctrl+Home | First item overall |
+| Ctrl+End | Last item overall |
+| Space / Enter | Activate the focused item (calls `onActivate`) |
+
+**Controlled mode:** pass `focusedIndex` to own the focus position externally. The gallery will not update its internal state; update `focusedIndex` from `onFocusedIndexChange` yourself. Useful for syncing a lightbox or selection state.
+
+**Virtualization + keyboard navigation:** when virtualization is enabled and the focused row scrolls off-screen, the container itself receives `tabIndex=0` so the gallery remains reachable via Tab. The first keypress scrolls the focused row back into view and transfers focus to the cell.
 
 ---
 
@@ -332,7 +377,7 @@ const rows = computeTesseraLayout(
 | `lastRow` | `'left' \| 'center' \| 'right' \| 'justify' \| 'hide'` | `'left'` | Alignment of the last (partial) row |
 | `minColumns` | `number` | — | Soft minimum items per row; caps `rowHeight` so N-item rows are viable |
 | `maxNumRows` | `number` | `Infinity` | Maximum number of rows; overflow items are dropped |
-| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height |
+| `maxShrink` | `number` | `0.75` | Hard minimum row height as a fraction of `rowHeight`; rows cannot be placed below this height. Must be strictly between 0 and 1 — values outside that range are ignored and the default is used. |
 | `maxStretch` | `number` | `1.5` | Controls how steeply the badness penalty rises above `rowHeight`; not a hard ceiling — rows may exceed this height if no better placement exists |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 
