@@ -73,6 +73,11 @@ export function useVirtualWindow(
       ro.observe(target as HTMLElement)
     } else {
       window.addEventListener('resize', handleScroll, { passive: true })
+      // Observe the document root so layout shifts above the gallery (expanding
+      // accordions, dynamically loaded content, etc.) trigger a re-measurement
+      // even when no scroll event fires.
+      ro = new ResizeObserver(update)
+      ro.observe(document.documentElement)
     }
 
     return () => {

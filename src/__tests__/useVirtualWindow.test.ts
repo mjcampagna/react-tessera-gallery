@@ -2,7 +2,11 @@ import { act, renderHook } from '@testing-library/react'
 
 import { useVirtualWindow } from '../useVirtualWindow'
 
-// ─── rAF mock ─────────────────────────────────────────────────────────────────
+// ─── Global mocks ─────────────────────────────────────────────────────────────
+
+// Capture the ResizeObserver callback so tests can fire it directly to simulate
+// layout shifts (document.documentElement resize) without dispatching DOM events.
+let capturedRoCallback: (() => void) | null = null
 
 beforeAll(() => {
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
@@ -10,6 +14,15 @@ beforeAll(() => {
     return 0
   })
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(cb: () => void) { capturedRoCallback = cb }
+    observe = vi.fn()
+    disconnect = vi.fn()
+  })
+})
+
+afterEach(() => {
+  capturedRoCallback = null
 })
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -120,5 +133,35 @@ describe('cleanup', () => {
 
     // Range should remain at the value set before unmount
     expect(result.current).toEqual({ top: 0, bottom: 600 })
+  })
+})
+
+// ─── layout shift detection ───────────────────────────────────────────────────
+
+describe('layout shift detection (window mode)', () => {
+  beforeEach(() => {
+    Object.defineProperty(window, 'innerHeight', { value: 600, configurable: true })
+  })
+
+  it('updates range when content above shifts gallery position without a scroll event', () => {
+    // Simulate: gallery at top of page (rect.top=0), then content above grows 100px,
+    // pushing the gallery down (rect.top=100). No scroll event fires — only the
+    // document.documentElement ResizeObserver callback triggers the re-measurement.
+    const rectTop = { value: 0 }
+    const ref = {
+      current: {
+        getBoundingClientRect: vi.fn(() => ({ top: rectTop.value })),
+      } as unknown as HTMLElement,
+    }
+    const { result } = renderHook(() => useVirtualWindow(ref, true))
+    expect(result.current).toEqual({ top: 0, bottom: 600 })
+
+    act(() => {
+      rectTop.value = 100
+      capturedRoCallback?.()
+    })
+
+    // containerTop = -100 (gallery top is 100px below viewport top — fully visible)
+    expect(result.current).toEqual({ top: -100, bottom: 500 })
   })
 })
