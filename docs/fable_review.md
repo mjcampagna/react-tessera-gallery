@@ -13,13 +13,13 @@ Findings are ordered roughly by severity.
 **2. `maxNumRows` ratchets past its limit in the hook.** ✅ *Fixed 2026-06-11*
 `computeTesseraLayout` truncates correctly, but the hook passes `maxNumRows` to every *frontier* computation (`useTesseraGallery.ts:270-276`). Render 1 with 20 items and `maxNumRows: 3` produces 3 rows and commits 2; the truncated items stay in the frontier, so the next re-render (any parent update, any `onLoad`) lays out the remainder with a fresh budget of 3 rows and commits 2 more. Each re-render grows the gallery by up to `maxNumRows − 1` rows until all items are shown. Tests only cover `maxNumRows` on the pure function, which is why this isn't caught.
 
-**3. Virtualization spacers are off by one flex `gap`.**
+**3. Virtualization spacers are off by one flex `gap`.** ✅ *Fixed 2026-06-12 (Sonnet)*
 `topSpacerHeight = rowTops[firstIndex]` (`useTesseraGallery.ts:378-379`) already includes the gap that should sit between the clipped rows and the first rendered row — but the spacer is a flex child, so the container's `gap` inserts another one (`TesseraGallery.tsx:29-31`). Once `firstIndex > 0`, all content shifts down by `gap` px and total scroll height inflates by up to `2 × gap`, causing a small visible jump the moment the first row gets clipped. The spacer heights should subtract one `gap` each (clamped at 0). The existing spacer tests all use the default `gap: 0`, so they can't see it.
 
 **4. `optionsKey` omits `minColumns`.** ✅ *Fixed 2026-06-11*
 The committed-rows reset key at `useTesseraGallery.ts:243` covers rowHeight/gap/maxShrink/maxStretch, but `minColumns` changes `effectiveIdealHeight` and therefore every row's geometry. Changing it at runtime leaves committed rows laid out under the old value until something else triggers a reset.
 
-**5. `onFocusedIndexChange` fires twice per keyboard navigation.**
+**5. `onFocusedIndexChange` fires twice per keyboard navigation.** ✅ *Fixed 2026-06-12 (Sonnet)*
 `navigateTo` calls it directly (`useTesseraGallery.ts:499`), then `target.focus()` triggers the cell's `onFocus`, which calls `handleItemFocus` → the callback again with the same index (`useTesseraGallery.ts:561-564`). Harmless for idempotent consumers, surprising for anyone counting events or syncing controlled state.
 
 **6. Docs drift: `overscan` default.** ✅ *Fixed 2026-06-11 (README + CLAUDE.md; optional JSDoc default in `types.ts` folded into the Sonnet backlog)*
@@ -27,21 +27,21 @@ Code uses `resolvedRowHeight * 4` (`useTesseraGallery.ts:343`); CLAUDE.md says `
 
 ## Edge cases worth handling or documenting
 
-- **`maxShrink ≥ 1` degenerates the whole layout.** `finitePositive` accepts it, making `minHeight ≥ idealHeight`, so nearly every candidate row fails the height check and falls into the pano path — every item becomes a solo full-width row. Clamping to `(0, 1)` (or warning) would be kinder than silent garbage.
-- **Virtualization × provisional aspect ratios.** Items committed with the placeholder ratio whose rows are outside the virtual window never mount, so `onLoad` never fires and the placeholder persists. When the user finally scrolls there, the load triggers `rollbackProvisionalRows`, which can re-layout rows the user is currently looking at — a mid-scroll jump. Probably inherent to the design, but worth a documented recommendation (provide `aspectRatio` upfront when virtualizing).
-- **Roving tabindex breaks when the focused row is virtualized out.** The only `tabIndex={0}` cell lives on the focused item (`TesseraGallery.tsx:53`); if its row unmounts, DOM focus drops to `<body>` and Tab skips the gallery entirely until something refocuses it. Same failure if a controlled `focusedIndex` exceeds the displayed count (clamping only happens inside `navigateTo`).
-- **Window-mode virtual range goes stale without scrolling.** With no `scrollContainerRef`, the range updates on `scroll`/`resize` only (`useVirtualWindow.ts:61-69`). If content above the gallery changes height, the gallery moves but the visible window isn't recomputed until the next scroll — wrong rows can be mounted in the meantime.
-- **Late-populating `scrollContainerRef`.** `resolveScrollEl` is called once when the effect runs; if `ref.current` is still null (conditionally rendered ancestor), the listener permanently binds to `window`. A re-check or documented requirement would help.
+- ✅ *Fixed 2026-06-12* — **`maxShrink ≥ 1` degenerates the whole layout.** `finitePositive` accepts it, making `minHeight ≥ idealHeight`, so nearly every candidate row fails the height check and falls into the pano path — every item becomes a solo full-width row. Clamping to `(0, 1)` (or warning) would be kinder than silent garbage.
+- ⏸ *Accepted (not planned)* — **Virtualization × provisional aspect ratios.** Items committed with the placeholder ratio whose rows are outside the virtual window never mount, so `onLoad` never fires and the placeholder persists. When the user finally scrolls there, the load triggers `rollbackProvisionalRows`, which can re-layout rows the user is currently looking at — a mid-scroll jump. Probably inherent to the design, but worth a documented recommendation (provide `aspectRatio` upfront when virtualizing).
+- ✅ *Fixed 2026-06-12 (container `tabIndex=0` fallback)* — **Roving tabindex breaks when the focused row is virtualized out.** The only `tabIndex={0}` cell lives on the focused item (`TesseraGallery.tsx:53`); if its row unmounts, DOM focus drops to `<body>` and Tab skips the gallery entirely until something refocuses it. Same failure if a controlled `focusedIndex` exceeds the displayed count (clamping only happens inside `navigateTo`).
+- ✅ *Fixed 2026-06-12 (`ResizeObserver` on `document.documentElement`)* — **Window-mode virtual range goes stale without scrolling.** With no `scrollContainerRef`, the range updates on `scroll`/`resize` only (`useVirtualWindow.ts:61-69`). If content above the gallery changes height, the gallery moves but the visible window isn't recomputed until the next scroll — wrong rows can be mounted in the meantime.
+- ✅ *Addressed 2026-06-12 (documented mount-time requirement)* — **Late-populating `scrollContainerRef`.** `resolveScrollEl` is called once when the effect runs; if `ref.current` is still null (conditionally rendered ancestor), the listener permanently binds to `window`. A re-check or documented requirement would help.
 - ✅ *Fixed 2026-06-11* — **Unbounded caches.** `aspectRatioCache`, `loadedSet`, and `errorSet` are never pruned. For an infinite-feed gallery with key churn, that's a slow leak. *(Now pruned with slack once the caches outgrow the current item set.)*
 - ✅ *Addressed 2026-06-11* — **Ref mutation during render** (committing rows, cache writes) is technically impure under React's concurrent-rendering rules. The guards make it largely idempotent, but a discarded concurrent render still advances `committedItemCountRef` — combined with bug #1's weak reset condition, that's the riskiest corner. *(Invariants documented in the hook; the key-mismatch guard from #1 closed the riskiest path.)*
 
 ## Smaller observations
 
-- The `dp[n]` unreachable fallback (`computeTesseraLayout.ts:145-154`) looks like dead code: the pano branch guarantees `dp[i+1]` is reachable from any reachable `dp[i]`, so `dp[n]` is always finite. Fine as a safety net, but a comment saying so would prevent someone trying to test it.
-- Widow rows in a later frontier batch match `prevRowHeight` *within that batch only* — the first row of a new frontier resets to `effectiveIdealHeight` rather than the actual previous committed row's height, so an appended widow can visibly snap. Minor, follows from the append-only design.
-- Justified rows get integer pixel widths via largest-remainder, but non-justified last rows keep fractional widths — a small inconsistency that can cause sub-pixel raggedness on widow rows.
-- Keyboard support is solid (arrows, Home/End, Ctrl+Home/End) but lacks PageUp/PageDown, which screen-reader grid users often expect.
-- Row `key={row.rowIndex}` means a provisional rollback that shifts row boundaries remounts every affected row's subtree; keying by `startIndex` or the first item's key would preserve more DOM across re-layouts.
+- ✅ *Done 2026-06-12* — The `dp[n]` unreachable fallback (`computeTesseraLayout.ts:145-154`) looks like dead code: the pano branch guarantees `dp[i+1]` is reachable from any reachable `dp[i]`, so `dp[n]` is always finite. Fine as a safety net, but a comment saying so would prevent someone trying to test it.
+- ⏸ *Accepted (not planned)* — Widow rows in a later frontier batch match `prevRowHeight` *within that batch only* — the first row of a new frontier resets to `effectiveIdealHeight` rather than the actual previous committed row's height, so an appended widow can visibly snap. Minor, follows from the append-only design.
+- ✅ *Done 2026-06-12* — Justified rows get integer pixel widths via largest-remainder, but non-justified last rows keep fractional widths — a small inconsistency that can cause sub-pixel raggedness on widow rows.
+- ✅ *Done 2026-06-12* — Keyboard support is solid (arrows, Home/End, Ctrl+Home/End) but lacks PageUp/PageDown, which screen-reader grid users often expect.
+- ✅ *Done 2026-06-12* — Row `key={row.rowIndex}` means a provisional rollback that shifts row boundaries remounts every affected row's subtree; keying by `startIndex` or the first item's key would preserve more DOM across re-layouts.
 
 ## Overall
 
@@ -65,13 +65,13 @@ Two of the smaller items ride along with this cluster rather than standing alone
 
 | Fix | Where | Status | Assignee |
 |---|---|---|---|
-| #3 spacer off-by-gap | virtual window math + `TesseraGallery.tsx` spacers | Open | **Sonnet** — fully specified in finding #3; subtract one `gap` from each spacer height (clamp at 0); add `gap > 0` spacer tests |
-| #5 double `onFocusedIndexChange` | `navigateTo`/`handleItemFocus` | Open | **Sonnet** — fully specified; suppress the duplicate call when programmatic focus lands |
+| #3 spacer off-by-gap | virtual window math + `TesseraGallery.tsx` spacers | ✅ Done 2026-06-12 | Sonnet — subtracted one `gap` from each spacer height (clamped at 0); `gap > 0` spacer tests added |
+| #5 double `onFocusedIndexChange` | `navigateTo`/`handleItemFocus` | ✅ Done 2026-06-12 | Sonnet — duplicate call suppressed via `programmaticFocusRef` |
 | #6 overscan docs drift | CLAUDE.md / README / `types.ts` | ✅ Done 2026-06-11 | — |
-| `maxShrink ≥ 1` clamp | `computeTesseraLayout.ts` | Open | **Sonnet** — clamp to `(0, 1)` in input sanitization; add a pure-function test |
-| Window-mode stale range | `useVirtualWindow.ts` | Open | **Sonnet, after approach is agreed** — how to detect the gallery moving without a scroll event (ResizeObserver on container vs. document) is a design choice; decide before delegating |
-| Late-populating `scrollContainerRef` | `useVirtualWindow.ts` | Open | **Sonnet** — bundle with the stale-range fix; both touch the same effect |
-| PageUp/PageDown, roving-tabindex hardening | navigation/render code | Open | **Sonnet, after approach is agreed** — PageUp/PageDown is mechanical, but the tabindex fallback when the focused row is virtualized out needs a behavior decision first |
+| `maxShrink ≥ 1` clamp | `computeTesseraLayout.ts` | ✅ Done 2026-06-12 | Sonnet — clamped to `(0, 1)`, falls back to 0.75; pure-function test added |
+| Window-mode stale range | `useVirtualWindow.ts` | ✅ Done 2026-06-12 | Sonnet — `ResizeObserver` on `document.documentElement` |
+| Late-populating `scrollContainerRef` | `useVirtualWindow.ts` | ✅ Done 2026-06-12 | Sonnet — resolved as documented mount-time requirement (JSDoc + README + CLAUDE.md) |
+| PageUp/PageDown, roving-tabindex hardening | navigation/render code | ✅ Done 2026-06-12 | Sonnet — PageUp/PageDown jump by visible-row count; container `tabIndex=0` fallback when focused row is virtualized out |
 
 Each open item is a small, self-contained change — give Sonnet the relevant finding paragraph plus the table row as the prompt; nothing else from this doc is required context. Items marked "after approach is agreed" have a design decision embedded; settle it (here or in the prompt) before delegating, or the implementation choice gets made implicitly.
 
@@ -100,3 +100,5 @@ Land the independent items whenever convenient (each is a small, self-verifying 
 - **Docs.** README: keyboard navigation section, navigable/focusedIndex/onFocusedIndexChange/onActivate/layout.focused props, maxShrink constraint, scrollContainerRef mount-time note. CLAUDE.md: keyboard navigation and scrollContainerRef requirement.
 
 **Not planned (accepted behavior):** widow rows snapping to `effectiveIdealHeight` in a later frontier batch (inherent to append-only); virtualization × provisional aspect-ratio jumps (mitigated by documented `aspectRatio`-upfront recommendation).
+
+**Review closed — 2026-06-12.** Every actionable finding is fixed or explicitly accepted. Shipped as 0.10.0; 170 tests pass, lint/typecheck/build clean. Pending: push + slithy sync/publish.
