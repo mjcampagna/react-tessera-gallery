@@ -77,7 +77,7 @@ import { TesseraGallery } from '@slithy/react-tessera-gallery'
 | `maxStretch` | `number` | `1.5` | Controls how steeply the badness penalty rises above `rowHeight`; not a hard ceiling — rows may exceed this height if no better placement exists |
 | `justifyThreshold` | `number` | `0.9` | Justify the last row if its natural fill ratio meets this threshold (0–1) |
 | `virtualize` | `boolean` | `false` | Only render rows near the viewport; spacer divs maintain full scroll height. Opt-in — no overhead when disabled. |
-| `overscan` | `number` | `rowHeight * 2` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
+| `overscan` | `number` | `rowHeight * 4` | Extra pixels to render beyond the viewport edge in each direction. Increase if images appear blank during fast scrolling. |
 | `skipErrors` | `boolean` | `false` | When true, items whose images fire `onError` are removed from the layout entirely rather than rendered as placeholders. |
 | `scrollContainerRef` | `ScrollContainerRef` | — | Required when the gallery is inside a scrollable div. The scroll listener attaches to this element instead of `window`. Accepts a `useRef` ref object or a `useState`-based element reference. |
 | `onRenderMetricsChange` | `(metrics: TesseraRenderMetrics) => void` | — | Fired whenever the rendered row window changes. Should be stable (e.g. `useCallback`). See `TesseraRenderMetrics`. |
@@ -246,6 +246,8 @@ type GalleryItem<T> = T & {
 Items with a known `aspectRatio` are laid out immediately. Items without one render immediately using a placeholder aspect ratio and re-layout once `handlers.onLoad` fires with real dimensions derived from `naturalWidth / naturalHeight`.
 
 Providing `aspectRatio` upfront is recommended when possible — it produces a stable layout from the first render and avoids the re-layout pass when images load.
+
+**Item identity and ordering:** items are tracked by `key`. Updating an item's data (passing a new object with the same key) is always reflected immediately, including in rows that are already laid out — layout geometry is unaffected. Appending items preserves the position of everything already laid out (this is the append-only guarantee). Prepending, removing, or reordering items is supported, but the gallery detects the change by key comparison and performs a full re-layout — positions are not preserved.
 
 ---
 

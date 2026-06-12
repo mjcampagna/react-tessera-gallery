@@ -417,3 +417,169 @@ describe('controlled focusedIndex', () => {
     expect(result.current.focusedIndex).toBe(1)
   })
 })
+
+// ─── Item identity across committed rows ─────────────────────────────────────
+//
+// Committed rows store geometry + keys only and resolve live item objects by
+// index at render time. Regression: rows used to capture item references at
+// commit time, so data updates (new object, same key) never reached committed
+// rows until an unrelated reset.
+
+describe('item identity in committed rows', () => {
+  type Photo = { key: string; caption: string }
+
+  function makePhotos(caption: string): GalleryItem<Photo>[] {
+    return KEYS.map(k => ({ key: k, aspectRatio: 1, caption }))
+  }
+
+  it('reflects updated item data in committed rows (same keys, same count)', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: GalleryItem<Photo>[] }) => useTesseraGallery(items, OPTIONS),
+      { initialProps: { items: makePhotos('before') } },
+    )
+    fireResize(WIDTH)
+    // Row 0 is committed (rows 0–1 committed, row 2 is the frontier)
+    expect(result.current.rows[0].items[0].item.caption).toBe('before')
+
+    rerender({ items: makePhotos('after') })
+
+    // Both committed rows and the frontier row surface the new objects
+    expect(result.current.rows[0].items[0].item.caption).toBe('after')
+    expect(result.current.rows.at(-1)!.items[0].item.caption).toBe('after')
+  })
+
+  it('keeps committed row geometry stable when only item data changes', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: GalleryItem<Photo>[] }) => useTesseraGallery(items, OPTIONS),
+      { initialProps: { items: makePhotos('before') } },
+    )
+    fireResize(WIDTH)
+    const widthsBefore = result.current.rows[0].items.map(i => i.width)
+
+    rerender({ items: makePhotos('after') })
+
+    expect(result.current.rows[0].items.map(i => i.width)).toEqual(widthsBefore)
+  })
+
+  it('re-lays out from scratch when items are prepended (append-only contract violated)', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: GalleryItem<{ key: string }>[] }) => useTesseraGallery(items, OPTIONS),
+      { initialProps: { items: KEYS.map(k => makeItem(k, 1)) } },
+    )
+    fireResize(WIDTH)
+    expect(allKeys(result.current.rows)).toEqual(KEYS)
+
+    rerender({ items: [makeItem('new', 1), ...KEYS.map(k => makeItem(k, 1))] })
+
+    // Without the key guard, the prepended item would shift every committed
+    // slot and render items under the wrong keys.
+    expect(allKeys(result.current.rows)).toEqual(['new', ...KEYS])
+  })
+
+  it('survives repeated full item replacement (key guard + cache pruning)', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: GalleryItem<{ key: string }>[] }) => useTesseraGallery(items, OPTIONS),
+      { initialProps: { items: KEYS.map(k => makeItem(k, 1)) } },
+    )
+    fireResize(WIDTH)
+
+    for (let gen = 0; gen < 30; gen++) {
+      rerender({ items: KEYS.map(k => makeItem(`g${gen}-${k}`, 1)) })
+    }
+
+    expect(allKeys(result.current.rows)).toHaveLength(9)
+    expect(allKeys(result.current.rows)).toEqual(KEYS.map(k => `g29-${k}`))
+  })
+})
+
+// ─── maxNumRows in the hook ───────────────────────────────────────────────────
+//
+// maxNumRows is a global cap shared between committed rows and the frontier.
+// Regression: each frontier recompute used to get a fresh maxNumRows budget,
+// so any re-render grew the gallery past the cap until all items were shown.
+
+describe('maxNumRows', () => {
+  it('caps total rows and stays capped across re-renders', () => {
+    const items = KEYS.map(k => makeItem(k, 1)) // 9 items → 3 natural rows
+    const { result, rerender } = renderHook(() =>
+      useTesseraGallery(items, { rowHeight: 100, maxNumRows: 2 }),
+    )
+    fireResize(WIDTH)
+    expect(result.current.totalRows).toBe(2)
+    expect(allKeys(result.current.rows)).toEqual(['0', '1', '2', '3', '4', '5'])
+
+    rerender()
+    rerender()
+
+    expect(result.current.totalRows).toBe(2)
+    expect(allKeys(result.current.rows)).toEqual(['0', '1', '2', '3', '4', '5'])
+  })
+
+  it('stays capped when re-renders are triggered by onLoad', () => {
+    const items = KEYS.map(k => makeItem(k))
+    const { result } = renderHook(() =>
+      useTesseraGallery(items, { rowHeight: 100, maxNumRows: 2 }),
+    )
+    fireResize(WIDTH)
+    expect(result.current.totalRows).toBe(2)
+
+    act(() => { result.current.onLoad('0', 100, 100) })
+    act(() => { result.current.onLoad('1', 100, 100) })
+
+    expect(result.current.totalRows).toBe(2)
+  })
+
+  it('does not grow past the cap when items are appended', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: GalleryItem<{ key: string }>[] }) =>
+        useTesseraGallery(items, { rowHeight: 100, maxNumRows: 2 }),
+      { initialProps: { items: KEYS.slice(0, 6).map(k => makeItem(k, 1)) } },
+    )
+    fireResize(WIDTH)
+    expect(result.current.totalRows).toBe(2)
+
+    rerender({ items: KEYS.map(k => makeItem(k, 1)) })
+
+    expect(result.current.totalRows).toBe(2)
+  })
+
+  it('re-lays out when maxNumRows changes', () => {
+    const items = KEYS.map(k => makeItem(k, 1))
+    const initialOptions: LayoutOptions = { rowHeight: 100 }
+    const { result, rerender } = renderHook(
+      ({ options }: { options: LayoutOptions }) => useTesseraGallery(items, options),
+      { initialProps: { options: initialOptions } },
+    )
+    fireResize(WIDTH)
+    expect(result.current.totalRows).toBe(3)
+
+    rerender({ options: { rowHeight: 100, maxNumRows: 1 } })
+
+    expect(result.current.totalRows).toBe(1)
+    expect(allKeys(result.current.rows)).toEqual(['0', '1', '2'])
+  })
+})
+
+// ─── Option changes that must reset committed rows ────────────────────────────
+
+describe('option change resets', () => {
+  it('re-lays out committed rows when minColumns changes', () => {
+    // At rowHeight=300 in a 300px container, square items lay out one per row.
+    // minColumns=2 caps the effective ideal height at 150 → two per row.
+    const items = KEYS.slice(0, 4).map(k => makeItem(k, 1))
+    const initialOptions: LayoutOptions = { rowHeight: 300 }
+    const { result, rerender } = renderHook(
+      ({ options }: { options: LayoutOptions }) => useTesseraGallery(items, options),
+      { initialProps: { options: initialOptions } },
+    )
+    fireResize(WIDTH)
+    expect(result.current.totalRows).toBe(4)
+
+    rerender({ options: { rowHeight: 300, minColumns: 2 } })
+
+    // Regression: minColumns was missing from the committed-rows reset key, so
+    // committed rows kept the old geometry until an unrelated reset.
+    expect(result.current.totalRows).toBe(2)
+    expect(result.current.rows[0].items).toHaveLength(2)
+  })
+})

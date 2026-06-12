@@ -32,7 +32,7 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 ### Key design decisions
 
-**Append-only rendering:** Once rows are fully committed, they are never reshuffled. Only the "frontier" (the last partial row plus any new items) is recomputed on each update. This prevents layout jumps when images lazy-load or new items append.
+**Append-only rendering:** Once rows are fully committed, they are never reshuffled. Only the "frontier" (the last partial row plus any new items) is recomputed on each update. This prevents layout jumps when images lazy-load or new items append. Committed rows store geometry and item keys only — live item objects are resolved by index at render time, so item data updates always propagate. A key-comparison guard detects prepends/removals/reorders and resets to a full re-layout. `maxNumRows` is enforced as a global cap: each frontier computation receives the budget minus already-committed rows.
 
 **Aspect ratio handling:** Items may declare `aspectRatio` upfront. If unknown, the hook discovers it via the `onLoad` callback when the `<img>` fires its load event, then caches it. Pre-known `aspectRatio` takes precedence and `onLoad` will not overwrite it.
 
@@ -52,7 +52,7 @@ The library exposes three levels of abstraction, all exported from `src/index.ts
 
 All shared types live in [src/types.ts](src/types.ts): `GalleryItem<T>`, `LayoutOptions`, `LayoutRow`, `ResolvedRow<T>`.
 
-`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`), `virtualize` (default `false`), `overscan` (default `rowHeight * 2`).
+`LayoutOptions` key fields: `rowHeight` (required), `gap`, `lastRow`, `minColumns`, `maxNumRows`, `maxShrink` (default `0.75`), `maxStretch` (default `1.5`), `justifyThreshold` (default `0.9`), `virtualize` (default `false`), `overscan` (default `rowHeight * 4`).
 
 ### Build output
 

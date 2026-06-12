@@ -287,7 +287,7 @@ describe('onRenderMetricsChange', () => {
       knownItem('a', 1), knownItem('b', 1), knownItem('c', 1),
       knownItem('d', 1), knownItem('e', 1),
     ]
-    const { result } = renderHook(() =>
+    renderHook(() =>
       useTesseraGallery(items, { rowHeight: 100, onRenderMetricsChange }),
     )
     act(() => fireResize(200))

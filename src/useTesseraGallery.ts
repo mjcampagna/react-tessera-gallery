@@ -5,13 +5,18 @@ import { computeTesseraLayout } from './computeTesseraLayout'
 import { useVirtualWindow, resolveScrollEl } from './useVirtualWindow'
 import type { GalleryItem, LayoutOptions, ResolvedRow, ScrollContainerRef, TesseraRenderMetrics } from './types'
 
-type CommittedRow<T> = {
+// Committed rows store only geometry and item keys. Live item objects are
+// looked up by index at render time, so consumers' item data updates (new
+// object, same key) are always reflected — a captured reference would go
+// stale once its row is committed.
+type CommittedRow = {
   height: number
-  items: Array<{ item: GalleryItem<T>; width: number; height: number }>
+  items: Array<{ key: string | number; width: number; height: number }>
 }
 
 function toResolvedRow<T>(
-  row: CommittedRow<T>,
+  row: CommittedRow,
+  items: GalleryItem<T>[],
   loadedSet: Set<string | number>,
   rowIndex: number,
   startIndex: number,
@@ -20,15 +25,29 @@ function toResolvedRow<T>(
     rowIndex,
     startIndex,
     height: row.height,
-    items: row.items.map(({ item, width, height }, colIndex) => ({
-      item,
+    items: row.items.map(({ key, width, height }, colIndex) => ({
+      item: items[startIndex + colIndex],
       itemIndex: startIndex + colIndex,
       colIndex,
       width,
       height,
-      loaded: loadedSet.has(item.key),
+      loaded: loadedSet.has(key),
     })),
   }
+}
+
+// True when the committed rows' keys still line up, in order, with the current
+// items. A mismatch means items were prepended, removed, or reordered — the
+// append-only contract was violated and committed geometry must be discarded.
+function committedRowsMatchItems<T>(rows: CommittedRow[], items: GalleryItem<T>[]): boolean {
+  let idx = 0
+  for (const row of rows) {
+    for (const cell of row.items) {
+      if (items[idx]?.key !== cell.key) return false
+      idx++
+    }
+  }
+  return true
 }
 
 type VirtualWindow = {
@@ -98,7 +117,7 @@ export function useTesseraGallery<T>(
 
   // Stabilized rows output — only updated when content genuinely changes
   const prevRowsRef = useRef<ResolvedRow<T>[]>([])
-  const allRowsRef = useRef<CommittedRow<T>[]>([])
+  const allRowsRef = useRef<CommittedRow[]>([])
   const rowTopsRef = useRef<number[]>([])
   const rowStartsRef = useRef<number[]>([])
   const totalItemsRef = useRef(0)
@@ -106,7 +125,7 @@ export function useTesseraGallery<T>(
   const virtualRange = useVirtualWindow(containerRef, options.virtualize === true, scrollContainerRef)
 
   // Append-only layout: committed rows are locked and never reshuffled
-  const committedRowsRef = useRef<CommittedRow<T>[]>([])
+  const committedRowsRef = useRef<CommittedRow[]>([])
   const committedItemCountRef = useRef(0)
   const committedContainerWidthRef = useRef(0)
   const committedOptionsKeyRef = useRef('')
@@ -118,12 +137,37 @@ export function useTesseraGallery<T>(
   const provisionalCommittedKeysRef = useRef<Set<string | number>>(new Set())
 
   // ─── Render-time sync ──────────────────────────────────────────────────────
+  //
+  // This hook intentionally mutates refs during render (cache sync here, row
+  // commits below). That is tolerated under StrictMode/concurrent re-renders
+  // because every mutation is idempotent and re-derivable from current props:
+  // a second render pass — or a render after a discarded one — sees the
+  // advanced state, recomputes only what remains, and produces the same
+  // output. If committed state ever disagrees with the current items, the
+  // reset block below detects it (width/options/key comparison) and rebuilds.
 
   // Sync items with pre-known aspectRatios into cache every render.
   // Pre-known aspectRatio takes precedence — onLoad will not overwrite it.
   for (const item of items) {
     if (item.aspectRatio !== undefined && Number.isFinite(item.aspectRatio) && item.aspectRatio > 0) {
       aspectRatioCache.current.set(item.key, item.aspectRatio)
+    }
+  }
+
+  // Prune cache entries for items no longer present, once the caches have
+  // grown well past the current item set. The slack keeps ratios cached for
+  // items that are temporarily filtered out and later restored, while bounding
+  // growth for long-lived galleries with item churn.
+  if (aspectRatioCache.current.size > items.length * 2 + 32) {
+    const currentKeys = new Set(items.map(item => item.key))
+    for (const key of aspectRatioCache.current.keys()) {
+      if (!currentKeys.has(key)) aspectRatioCache.current.delete(key)
+    }
+    for (const key of loadedSet.current) {
+      if (!currentKeys.has(key)) loadedSet.current.delete(key)
+    }
+    for (const key of errorSet.current) {
+      if (!currentKeys.has(key)) errorSet.current.delete(key)
     }
   }
 
@@ -240,18 +284,23 @@ export function useTesseraGallery<T>(
     typeof options.gap === 'function' ? options.gap(containerWidth) : (options.gap ?? 0)
   const resolvedGap = finiteNonNegative(rawGap)
 
-  const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}`
+  const maxNumRows = options.maxNumRows ?? Infinity
+
+  const optionsKey = `${resolvedRowHeight}|${resolvedGap}|${options.maxShrink ?? 0.75}|${options.maxStretch ?? 1.5}|${options.minColumns ?? ''}|${maxNumRows}`
 
   const errorSetSize = errorSet.current.size
 
   // Reset committed rows when container width, key options, or item set changes.
   // Also reset when skipErrors is on and the error set grows — a committed item
   // may have been filtered out, which the length-only check won't always catch.
+  // The key comparison catches prepends, removals, and reorders that leave the
+  // item count unchanged or larger.
   if (
     containerWidth !== committedContainerWidthRef.current ||
     optionsKey !== committedOptionsKeyRef.current ||
     resolvedItems.length < committedItemCountRef.current ||
-    (options.skipErrors && errorSetSize !== committedErrorSetSizeRef.current)
+    (options.skipErrors && errorSetSize !== committedErrorSetSizeRef.current) ||
+    !committedRowsMatchItems(committedRowsRef.current, resolvedItems)
   ) {
     committedRowsRef.current = []
     committedItemCountRef.current = 0
@@ -265,25 +314,31 @@ export function useTesseraGallery<T>(
   // Compute layout only for items beyond the committed frontier
   const frontierItems = resolvedItems.slice(committedItemCountRef.current)
 
+  // maxNumRows is a global cap shared between committed rows and the frontier.
+  // Committed rows already consume part of the budget — without subtracting
+  // them, every frontier recompute would get a fresh allowance and the gallery
+  // would ratchet past the cap on re-renders.
+  const remainingRowBudget = maxNumRows - committedRowsRef.current.length
+
   const frontierLayout =
-    containerWidth > 0 && frontierItems.length > 0
+    containerWidth > 0 && frontierItems.length > 0 && remainingRowBudget > 0
       ? computeTesseraLayout(
           frontierItems.map(item => ({
             aspectRatio: aspectRatioCache.current.get(item.key) ?? 1,
           })),
           containerWidth,
-          { ...options, rowHeight: resolvedRowHeight, gap: resolvedGap },
+          { ...options, rowHeight: resolvedRowHeight, gap: resolvedGap, maxNumRows: remainingRowBudget },
         )
       : []
 
-  // Convert frontier layout rows to typed rows with item references
-  const frontierRows: CommittedRow<T>[] = []
+  // Convert frontier layout rows to geometry rows keyed by item
+  const frontierRows: CommittedRow[] = []
   let itemIdx = 0
   for (const layoutRow of frontierLayout) {
     frontierRows.push({
       height: layoutRow.height,
       items: layoutRow.items.map(layoutItem => ({
-        item: frontierItems[itemIdx++],
+        key: frontierItems[itemIdx++].key,
         width: layoutItem.width,
         height: layoutItem.height,
       })),
@@ -301,9 +356,9 @@ export function useTesseraGallery<T>(
     const rowStartCount = committedItemCountRef.current
     committedRowsRef.current.push(row)
     committedItemCountRef.current += row.items.length
-    for (const { item } of row.items) {
-      if (!aspectRatioCache.current.has(item.key)) {
-        provisionalCommittedKeysRef.current.add(item.key)
+    for (const { key } of row.items) {
+      if (!aspectRatioCache.current.has(key)) {
+        provisionalCommittedKeysRef.current.add(key)
         if (firstProvisionalRowStartCountRef.current === Infinity) {
           firstProvisionalRowStartCountRef.current = rowStartCount
         }
@@ -311,7 +366,7 @@ export function useTesseraGallery<T>(
     }
   }
 
-  const allRows: CommittedRow<T>[] = [...committedRowsRef.current]
+  const allRows: CommittedRow[] = [...committedRowsRef.current]
   const lastFrontierRow = frontierRows[frontierRows.length - 1]
   if (lastFrontierRow) {
     allRows.push(lastFrontierRow)
@@ -392,7 +447,7 @@ export function useTesseraGallery<T>(
           .slice(firstRenderRow, lastRenderRow + 1)
           .map((row, offset) => {
             const rowIndex = firstRenderRow + offset
-            return toResolvedRow(row, loadedSet.current, rowIndex, rowStarts[rowIndex] ?? 0)
+            return toResolvedRow(row, resolvedItems, loadedSet.current, rowIndex, rowStarts[rowIndex] ?? 0)
           })
 
   // Stabilize the render rows reference — only return a new array if something
