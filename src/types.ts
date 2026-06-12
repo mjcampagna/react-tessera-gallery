@@ -14,17 +14,26 @@ export type TesseraRenderMetrics = {
 
 export type LayoutOptions = {
   rowHeight: number | ((containerWidth: number) => number)
+  /** @default 0 */
   gap?: number | ((containerWidth: number) => number)
+  /** @default 'left' */
   lastRow?: 'justify' | 'left' | 'center' | 'right' | 'hide'
   minColumns?: number
   maxNumRows?: number
+  /** Fraction of idealHeight a row may shrink to. Must be in (0, 1); values outside that range fall back to the default. @default 0.75 */
   maxShrink?: number
+  /** @default 1.5 */
   maxStretch?: number
+  /** @default 0.9 */
   justifyThreshold?: number
   padding?: number
+  /** @default false */
   virtualize?: boolean
+  /** Pixels of extra rows rendered above and below the visible window. @default rowHeight * 4 */
   overscan?: number
+  /** @default false */
   skipErrors?: boolean
+  /** @default false */
   navigable?: boolean
   focusedIndex?: number
   onFocusedIndexChange?: (index: number) => void

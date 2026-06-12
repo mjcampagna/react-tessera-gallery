@@ -133,6 +133,10 @@ export function computeTesseraLayout(
   //
   // If dp[n] is unreachable (no valid path covers all items), fall back:
   // find the last reachable position, then treat remaining items as the last row.
+  //
+  // In practice dp[n] is always finite: the pano branch guarantees dp[i+1] is
+  // reachable from any reachable dp[i], so by induction dp[n] is always reached.
+  // The else branch is a safety net and should never execute.
 
   const breaks: number[] = []
 
@@ -221,7 +225,7 @@ function buildRow(
       height,
       items: items.slice(start, end).map(item => ({
         aspectRatio: item.aspectRatio,
-        width: item.aspectRatio * height,
+        width: Math.round(item.aspectRatio * height),
         height,
       })),
     }

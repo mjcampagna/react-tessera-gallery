@@ -58,7 +58,7 @@ export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...op
 
         return (
           <div
-            key={row.rowIndex}
+            key={row.startIndex}
             style={{ display: 'flex', gap: `${gap}px`, justifyContent, contain: 'layout' }}
             {...(navigable ? { role: 'row', 'aria-rowindex': row.rowIndex + 1 } : {})}
           >
