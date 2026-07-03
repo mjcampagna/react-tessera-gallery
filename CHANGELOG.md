@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-07-02
+
+### Fixed
+
+- **Per-item `onLoad`/`onError` handlers were unstable across renders.** `TesseraGallery` built a new closure per item on every render, even though the underlying hook callbacks were memoized — so the `React.memo` custom-comparator pattern documented in the README (`prev.onLoad === next.onLoad`) never actually short-circuited. Handlers are now cached per item key in `useTesseraGallery` (`getItemHandlers`), pruned alongside the other per-key caches.
+
 ## 0.10.0 — 2026-06-12
 
 ### Added

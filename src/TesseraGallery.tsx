@@ -15,7 +15,7 @@ type Props<T> = {
 } & LayoutOptions
 
 export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...options }: Props<T>): ReactNode {
-  const { containerRef, rows, totalRows, gap, onLoad, onError, virtualWindow, focusedIndex, handleItemFocus, handleItemKeyDown } = useTesseraGallery(items, options, scrollContainerRef)
+  const { containerRef, rows, totalRows, gap, getItemHandlers, virtualWindow, focusedIndex, handleItemFocus, handleItemKeyDown } = useTesseraGallery(items, options, scrollContainerRef)
   const { lastRow = 'left' } = options
 
   const navigable = options.navigable === true
@@ -76,14 +76,7 @@ export function TesseraGallery<T>({ items, renderItem, scrollContainerRef, ...op
                     onFocus: () => handleItemFocus(itemIndex),
                   } : {})}
                 >
-                  {renderItem(
-                    item,
-                    { width, height, loaded, focused },
-                    {
-                      onLoad: e => onLoad(item.key, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight),
-                      onError: () => onError(item.key),
-                    },
-                  )}
+                  {renderItem(item, { width, height, loaded, focused }, getItemHandlers(item.key))}
                 </div>
               )
             })}

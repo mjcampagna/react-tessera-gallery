@@ -90,7 +90,7 @@ Complications for our library:
 
 **Documented in README** under the Virtualization section, with a concrete example using a custom comparator.
 
-**Gap found while reviewing `react-grid-gallery`'s equivalent work (which solved this via per-key stable handlers, e.g. `getItemImageProps(key)`):** the `handlers.onLoad`/`handlers.onError` passed to `renderItem` are *not* stable either. `TesseraGallery.tsx` wraps the hook's memoized `onLoad`/`onError` in a fresh closure per item on every render (`onLoad: e => onLoad(item.key, ...)`), so the identity churns even though the underlying callback doesn't. The README's custom-comparator example compares `prev.onLoad === next.onLoad`, but in practice that comparison never holds — the memo doesn't skip the re-render the docs imply it does. See `docs/reference/known-limitations.md`.
+**Gap found while reviewing `react-grid-gallery`'s equivalent work, now fixed:** the `handlers.onLoad`/`handlers.onError` passed to `renderItem` used to be recreated as a fresh closure per item on every render (`onLoad: e => onLoad(item.key, ...)` inline in `TesseraGallery.tsx`), even though the underlying hook callbacks were memoized — so the README's `prev.onLoad === next.onLoad` comparator never actually held. Fixed by caching per-key handlers in `useTesseraGallery` (`getItemHandlers(key)`, analogous to `react-grid-gallery`'s `getItemImageProps(key)`), pruned alongside the aspect-ratio/loaded/error caches. `TesseraGallery` now calls `getItemHandlers(item.key)` instead of building the object inline.
 
 ---
 

@@ -57,6 +57,11 @@ type VirtualWindow = {
   bottomSpacerHeight: number
 }
 
+type ItemHandlers = {
+  onLoad: React.ReactEventHandler<HTMLImageElement>
+  onError: React.ReactEventHandler<HTMLImageElement>
+}
+
 function buildRenderMetrics<T>(
   rows: ResolvedRow<T>[],
   totalItemCount: number,
@@ -94,6 +99,7 @@ export function useTesseraGallery<T>(
   gap: number
   onLoad: (key: string | number, naturalWidth: number, naturalHeight: number) => void
   onError: (key: string | number) => void
+  getItemHandlers: (key: string | number) => ItemHandlers
   virtualWindow: VirtualWindow | null
   focusedIndex: number
   handleItemFocus: (index: number) => void
@@ -115,6 +121,10 @@ export function useTesseraGallery<T>(
   const loadedSet = useRef<Set<string | number>>(new Set())
   // Tracks items whose images failed to load
   const errorSet = useRef<Set<string | number>>(new Set())
+  // Per-key onLoad/onError closures for renderItem, cached so identity is
+  // stable across renders — without this, a consumer's React.memo item
+  // component would re-render every time regardless of memoization.
+  const itemHandlersCache = useRef<Map<string | number, ItemHandlers>>(new Map())
   // Increment to trigger re-renders when cache or loadedSet changes
   const [, rerender] = useReducer(n => n + 1, 0)
 
@@ -171,6 +181,9 @@ export function useTesseraGallery<T>(
     }
     for (const key of errorSet.current) {
       if (!currentKeys.has(key)) errorSet.current.delete(key)
+    }
+    for (const key of itemHandlersCache.current.keys()) {
+      if (!currentKeys.has(key)) itemHandlersCache.current.delete(key)
     }
   }
 
@@ -265,6 +278,18 @@ export function useTesseraGallery<T>(
     },
     [rollbackProvisionalRows],
   )
+
+  function getItemHandlers(key: string | number): ItemHandlers {
+    let handlers = itemHandlersCache.current.get(key)
+    if (!handlers) {
+      handlers = {
+        onLoad: e => onLoad(key, e.currentTarget.naturalWidth, e.currentTarget.naturalHeight),
+        onError: () => onError(key),
+      }
+      itemHandlersCache.current.set(key, handlers)
+    }
+    return handlers
+  }
 
   // ─── Append-only layout ────────────────────────────────────────────────────
   //
@@ -668,5 +693,5 @@ export function useTesseraGallery<T>(
     }
   })
 
-  return { containerRef, rows: prevRowsRef.current, totalRows, gap: resolvedGap, onLoad, onError, virtualWindow, focusedIndex: effectiveFocusedIndex, handleItemFocus, handleItemKeyDown }
+  return { containerRef, rows: prevRowsRef.current, totalRows, gap: resolvedGap, onLoad, onError, getItemHandlers, virtualWindow, focusedIndex: effectiveFocusedIndex, handleItemFocus, handleItemKeyDown }
 }

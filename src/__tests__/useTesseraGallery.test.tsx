@@ -243,6 +243,34 @@ describe('onError', () => {
   })
 })
 
+// ─── getItemHandlers ───────────────────────────────────────────────────────────
+
+describe('getItemHandlers', () => {
+  it('returns the same handlers object for a key across renders', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([knownItem('a', 1), knownItem('b', 1)], { rowHeight: 100 }),
+    )
+    act(() => fireResize(200))
+    const first = result.current.getItemHandlers('a')
+
+    // Trigger a re-render unrelated to item 'a' — handlers must stay referentially stable.
+    act(() => fireResize(150))
+    const second = result.current.getItemHandlers('a')
+
+    expect(second).toBe(first)
+    expect(second.onLoad).toBe(first.onLoad)
+    expect(second.onError).toBe(first.onError)
+  })
+
+  it('returns different handlers for different keys', () => {
+    const { result } = renderHook(() =>
+      useTesseraGallery([knownItem('a', 1), knownItem('b', 1)], { rowHeight: 100 }),
+    )
+    act(() => fireResize(200))
+    expect(result.current.getItemHandlers('a')).not.toBe(result.current.getItemHandlers('b'))
+  })
+})
+
 // ─── skipErrors ──────────────────────────────────────────────────────────────
 
 describe('skipErrors', () => {

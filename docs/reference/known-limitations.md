@@ -1,3 +1,3 @@
 # Known Limitations
 
-**Per-item `onLoad`/`onError` handlers are not stable across renders.** `TesseraGallery` wraps the hook's memoized `onLoad`/`onError` callbacks in a new closure per visible item on every render (`TesseraGallery.tsx:83-84`), even though the underlying callbacks (`useTesseraGallery.ts:212,244`) are `useCallback`-memoized. Consumers following the README's `React.memo` custom-comparator example (comparing `prev.onLoad === next.onLoad`) won't get the re-render savings that pattern implies, since that field never compares equal. A per-key handler cache (analogous to `react-grid-gallery`'s `getItemImageProps(key)`) would fix this — not yet implemented. See `docs/research/virtualization-reference.md` for the full writeup.
+_No open limitations._
