@@ -47,6 +47,8 @@ window.addEventListener('scroll', handleScroll, { passive: true })
 
 - For a "fake scroll" (custom scroll simulation): listen to `wheel` events, track a virtual scroll offset, and use that to derive which items are in the window. This decouples rendering from native scroll behavior and gives full control over scroll speed and inertia — but is complex and likely overkill for a standard gallery
 
+**Finding from our implementation:** a debounced `scroll`/`resize` listener alone misses layout shifts that aren't driven by either event — e.g. content above the gallery growing/shrinking in window-scroll mode, or the scroll container itself resizing without a window resize. `useVirtualWindow` additionally attaches a `ResizeObserver` (to `document.documentElement` in window mode, or to `scrollContainerRef`'s element otherwise) so the visible range is re-measured on layout shift, not just on scroll/resize.
+
 ---
 
 ## DOM update methods (Vanilla JS context)
@@ -87,6 +89,8 @@ Complications for our library:
 - Consumers who wrap their `renderItem` output in `React.memo` may need a custom comparator to handle the layout object reference
 
 **Documented in README** under the Virtualization section, with a concrete example using a custom comparator.
+
+**Gap found while reviewing `react-grid-gallery`'s equivalent work (which solved this via per-key stable handlers, e.g. `getItemImageProps(key)`):** the `handlers.onLoad`/`handlers.onError` passed to `renderItem` are *not* stable either. `TesseraGallery.tsx` wraps the hook's memoized `onLoad`/`onError` in a fresh closure per item on every render (`onLoad: e => onLoad(item.key, ...)`), so the identity churns even though the underlying callback doesn't. The README's custom-comparator example compares `prev.onLoad === next.onLoad`, but in practice that comparison never holds — the memo doesn't skip the re-render the docs imply it does. See `docs/reference/known-limitations.md`.
 
 ---
 
@@ -152,3 +156,5 @@ Our implementation uses two spacer divs — one above, one below visible rows. T
 - `transform: translateY()` avoids reflow on position updates
 
 For our justified layout with known row heights, the spacer approach is the right choice — and the one we shipped.
+
+**Gotcha found from our implementation:** the container is a flex column with `gap` between children. Each spacer is itself a flex child, so the container's `gap` already inserts space between a spacer and the nearest rendered row — a naive `topSpacerHeight = rowTops[firstIndex]` double-counts that gap on top of the one baked into the cumulative row-top math. The fix is to subtract one `gap` from each spacer height (clamped at 0). Anyone porting this to a non-flex layout (or the vanilla-JS translation) needs to check whether their container's spacing mechanism has the same double-counting risk.
